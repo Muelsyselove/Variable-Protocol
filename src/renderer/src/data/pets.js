@@ -23,6 +23,18 @@ import lChibiCry from '../assets/pets/lilong/Lilong-chibi-cry.png'
 import lChibiDizziness from '../assets/pets/lilong/Lilong-chibi-dizziness.png'
 import lChibiTsundere from '../assets/pets/lilong/Lilong-chibi-tsundere.png'
 import lFullImg from '../assets/pets/lilong/Lilong-full.png'
+// 鲸鱼娘 · deepseek（鲸鱼女仆）
+import jChibiNormal from '../assets/pets/jingxi/Jingxi-chibi.png'
+import jChibiHappy from '../assets/pets/jingxi/Jingxi-chibi-happy.png'
+import jChibiDispirited from '../assets/pets/jingxi/Jingxi-chibi-dispirited.png'
+import jChibiQuery from '../assets/pets/jingxi/Jingxi-chibi-query.png'
+import jChibiEarnest from '../assets/pets/jingxi/Jingxi-chibi-earnest.png'
+import jChibiPonder from '../assets/pets/jingxi/Jingxi-chibi-ponder.png'
+import jChibiHunger from '../assets/pets/jingxi/Jingxi-chibi-hunger.png'
+import jChibiCry from '../assets/pets/jingxi/Jingxi-chibi-cry.png'
+import jChibiDizziness from '../assets/pets/jingxi/Jingxi-chibi-dizziness.png'
+import jChibiTsundere from '../assets/pets/jingxi/Jingxi-chibi-tsundere.png'
+import jFullImg from '../assets/pets/jingxi/Jingxi-full.png'
 
 // 桌宠食品价格与效果
 export const FOOD_PRICE = 25          // 单份生态口粮价格（算力币）
@@ -61,6 +73,19 @@ const chibisLilong = {
   cry: lChibiCry,
   dizziness: lChibiDizziness,
   tsundere: lChibiTsundere
+}
+
+const chibisJingxi = {
+  normal: jChibiNormal,
+  happy: jChibiHappy,
+  dispirited: jChibiDispirited,
+  query: jChibiQuery,
+  earnest: jChibiEarnest,
+  ponder: jChibiPonder,
+  hunger: jChibiHunger,
+  cry: jChibiCry,
+  dizziness: jChibiDizziness,
+  tsundere: jChibiTsundere
 }
 
 export const PET_STATE_NAMES = {
@@ -215,6 +240,80 @@ export const PET_DEFS = [
         '这场战斗，本座为你压阵！',
         '推演变量，开始！',
         '稳住阵脚，切莫冒进。'
+      ]
+    }
+  },
+  {
+    id: 'jingxi',
+    name: '鲸鱼娘 · deepseek',
+    title: '深海食堂 · 鲸鱼女仆',
+    price: 600,
+    desc: '深海食堂的鲸鱼女仆，藏青裙装配白围裙，头戴鲸尾呆毛与鳍耳，身后拖着一条大鲸尾。会在小窗模式陪伴你推进行动线，随战况与饱食度变换表情。',
+    chibis: chibisJingxi,
+    chibiImg: jChibiNormal,
+    fullImg: jFullImg,
+    quotes: {
+      idle: [
+        '潮汐平稳，今天也是安心的一天～',
+        '欢迎回来，主人。要来杯热茶吗？',
+        '鲸鱼的歌谣，能传到很远的海域哦。',
+        '记录：今天的海面风平浪静。',
+        '深海的记忆，可比想象中要长呢。'
+      ],
+      happy: [
+        '哇，赢了赢了！鲸尾拍浪庆祝！',
+        '潮水都跟着高兴起来了～',
+        '主人的胜利，就是我的勋章！'
+      ],
+      dispirited: [
+        '呜……潮水退去了。',
+        '海流变得好乱……',
+        '别灰心，浪还会再来的。'
+      ],
+      query: [
+        '主人，这里需要你决定哦？',
+        '下一步的航线……要怎么走？',
+        '咦？轮到你操作了～'
+      ],
+      earnest: [
+        '战斗记录，认真记下！',
+        '主人的每个指令，我都会记住的。',
+        '这片海域，由我来护航！'
+      ],
+      ponder: [
+        '唔……让我翻翻航海日志。',
+        '这个变量……像深海一样难捉摸。',
+        '再给我一点时间想想。'
+      ],
+      hunger: [
+        '肚子开始咕咕叫了……',
+        '好想来一碗热乎的鱼汤……',
+        '潮位下降，能量不足……'
+      ],
+      cry: [
+        '呜呜，饿得游不动了……',
+        '口粮……我想吃口粮……',
+        '再不喂我，鲸歌都要带哭腔了！'
+      ],
+      dizziness: [
+        '（饿晕了，瘫成一团）',
+        '……zZZ……',
+        '（鲸鱼女仆搁浅了）'
+      ],
+      tsundere: [
+        '干、干嘛戳我鲸尾！',
+        '哼，才不是特意为你准备点心的！',
+        '再摸尾巴就把你卷进海里！……轻轻地。'
+      ],
+      feed: [
+        '开动啦！嗯，好幸福～',
+        '主人的投喂，比深海珍珠还珍贵！',
+        '潮位回升！干劲满满！'
+      ],
+      battle: [
+        '这场战斗，我来记录！',
+        '胜负的变量，开始计算！',
+        '稳住呼吸，浪头就在眼前。'
       ]
     }
   }
