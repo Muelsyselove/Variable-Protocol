@@ -22,7 +22,8 @@ const profile = {
   sound: { enabled: true, volume: 0.8 },
   ai: {
     endpoint: 'https://api.deepseek.com',
-    apiKey: '***REMOVED***',
+    // 密钥从环境变量传入（VP_AI_KEY），禁止硬编码
+    apiKey: process.env.VP_AI_KEY || '',
     model: 'deepseek-flash'
   },
   agentConfig: {

@@ -1,5 +1,10 @@
 // 最后验证：不带 response_format 请求，检查响应字段结构；若有 url 则下载验证 alpha
-const key = '***REMOVED***';
+// 密钥从环境变量读取，禁止硬编码
+const key = process.env.DENXIO_API_KEY;
+if (!key) {
+  console.error('缺少环境变量 DENXIO_API_KEY');
+  process.exit(1);
+}
 
 const res = await fetch('https://api.denxio.com/images/generations', {
   method: 'POST',
