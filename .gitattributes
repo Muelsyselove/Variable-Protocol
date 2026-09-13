@@ -1,0 +1,15 @@
+# 文本统一 LF（跨平台协作），二进制资产不做换行转换
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.woff binary
+*.woff2 binary
+*.ogg binary
+*.mp3 binary
+*.wav binary
+*.exe binary
+*.blockmap binary

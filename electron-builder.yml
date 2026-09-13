@@ -1,0 +1,32 @@
+appId: com.openclawwork.variable-protocol
+productName: 变量协议
+copyright: Copyright © 2026
+directories:
+  output: dist
+files:
+  - out/**
+  - "!**/node_modules/**"
+asar: true
+# icon.ico/png 通过 extraResources 放到 asar 外的 resources 目录：
+# Windows 任务栏/窗口图标 API 需要磁盘真实路径，asar 归档内的 ico 无法被读取（表现为任务栏空白图标）
+extraResources:
+  - from: resources
+    to: .
+compression: maximum
+win:
+  target: nsis
+  icon: resources/icon.ico
+nsis:
+  # 向导式安装：可自选安装位置、可勾选是否创建桌面快捷方式
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 变量协议
+  artifactName: VariableProtocol-Setup-${version}.exe
+  uninstallDisplayName: 变量协议 v${version}
+  # 自定义卸载钩子：升级/卸载删除安装目录前，把旧版 data\saves 存档备份到 %APPDATA%，防止升级清档
+  include: build/installer.nsh
+  # 卸载时是否删除 %APPDATA% 用户数据：默认询问且不勾选，保留存档
+  deleteAppDataOnUninstall: false

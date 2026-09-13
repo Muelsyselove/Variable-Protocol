@@ -1,0 +1,16 @@
+# 依赖与构建产物
+node_modules/
+out/
+dist/
+*.log
+
+# IDE / 工具配置
+.trae/
+
+# 开发脚本测试残留
+scripts/.chibi-*-backup/
+scripts/.mcp-real-test/
+scripts/.ui-test/
+
+# 本地工作目录
+bug反馈/

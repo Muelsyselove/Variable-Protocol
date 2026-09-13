@@ -1,0 +1,347 @@
+// 设置界面：AI接口配置 + AI编写自动代理优先级 + 声音
+import { show, registerScreen } from '../../router.js'
+import { G, saveProfile } from '../../state.js'
+import { aiChat, generateAgentConfig, aiConfigured } from '../../core/aiService.js'
+import { defaultAgentConfig } from '../../core/agentConfig.js'
+import {
+  getSchemes, getActiveScheme, createScheme, updateScheme, renameScheme, deleteScheme, activateScheme
+} from '../../core/schemes.js'
+import { setSfxEnabled, setSfxVolume, playSfx } from '../../core/sfx.js'
+import { checkUpdate, getLastCheck } from '../../core/updater.js'
+import { el } from '../components.js'
+
+export function register() {
+  registerScreen('settings', renderSettings)
+}
+
+function renderSettings(root, params) {
+  const ai = G.profile.ai
+  const miniStyle = G.profile.miniStyle === 'pet' ? 'pet' : 'hub'
+  const cont = el(`
+  <div class="screen screen-settings">
+    <div class="settings-head">
+      <div class="crumb">// TERMINAL · 设置</div>
+      <h2>系统设置</h2>
+    </div>
+    <div class="settings-body">
+      <div class="settings-col panel">
+        <div class="set-title">// AI 接口</div>
+        <div class="set-note dim">OpenAI 兼容接口。地址可直接填 Base URL（自动补全 /chat/completions），如 https://api.openai.com/v1 、https://dashscope.aliyuncs.com/compatible-mode/v1 、http://localhost:11434 。用于智慧代理实时决策与AI编写优先级。</div>
+        <label class="set-row"><span class="k">接口地址</span>
+          <input type="text" id="ai-endpoint" placeholder="https://api.openai.com/v1/chat/completions" value="${ai.endpoint}"/>
+        </label>
+        <label class="set-row"><span class="k">API 密钥</span>
+          <input type="password" id="ai-key" placeholder="sk-..." value="${ai.apiKey}"/>
+        </label>
+        <label class="set-row"><span class="k">模型</span>
+          <input type="text" id="ai-model" placeholder="gpt-4o-mini" value="${ai.model}"/>
+        </label>
+        <div class="set-actions">
+          <button class="btn btn-mini" id="btn-ai-save">保存配置</button>
+          <button class="btn btn-mini" id="btn-ai-test">测试连接</button>
+          <span class="set-status dim" id="ai-status"></span>
+        </div>
+      </div>
+
+      <div class="settings-col panel">
+        <div class="set-title">// 自动协议方案池</div>
+        <div class="set-note dim">自动协议（自动代理）按方案处理开局选择、事件选项、商店购买、奖励关、BOSS掉落与核心放置。可保存多个方案并随时切换。</div>
+        <div class="scheme-list" id="scheme-list"></div>
+        <div class="set-actions">
+          <button class="btn btn-mini" id="btn-scheme-new">新建方案</button>
+          <button class="btn btn-mini btn-primary" id="btn-scheme-ai-new" ${aiConfigured() ? '' : 'disabled'}>AI新建方案</button>
+          <button class="btn btn-mini" id="btn-scheme-ai-adjust" ${aiConfigured() ? '' : 'disabled'}>AI调整当前方案</button>
+        </div>
+        <textarea id="agent-pref" class="set-textarea" placeholder="策略偏向（供AI新建/调整时参考，可选），例如：&#10;激进速攻，优先攻击力和伤害转译器；生命长期保持健康；事件里倾向冒险"></textarea>
+        <div class="set-status dim" id="agent-status"></div>
+        <div class="agent-config-view" id="agent-config-view"></div>
+      </div>
+
+      <div class="settings-col panel">
+        <div class="set-title">// 进化模式</div>
+        <div class="set-row"><span class="k">进化模式</span>
+          <label class="set-switch"><input type="checkbox" id="evo-enabled" ${G.profile.evolution ? 'checked' : ''}/><span class="set-switch-text">${G.profile.evolution ? '已开启' : '已关闭'}</span></label>
+        </div>
+        <div class="set-note dim">开启后，每局结束（自动代理协议下）将本局实战数据发送给AI，调优当前激活的方案并替换；配合连战时下一局即使用调优后的方案，循环进化。需配置AI接口。</div>
+      </div>
+
+      <div class="settings-col panel">
+        <div class="set-title">// 小窗模式</div>
+        <div class="set-note dim">选择进入小窗模式后的呈现形式。切换后下次进入小窗生效。</div>
+        <div class="mini-style-opts">
+          <div class="ms-opt ${miniStyle === 'hub' ? 'active' : ''}" data-style="hub">
+            <div class="ms-opt-name">常规小窗</div>
+            <div class="ms-opt-desc dim">信息中枢：状态、层数、通量、桌宠面板与操作按钮并排展示。</div>
+          </div>
+          <div class="ms-opt ${miniStyle === 'pet' ? 'active' : ''}" data-style="pet">
+            <div class="ms-opt-name">桌宠模式</div>
+            <div class="ms-opt-desc dim">桌面悬浮窗：隐藏游戏窗口后台自动推进，屏幕上仅显示桌宠与消息气泡（正在战斗/正在决策等）。左键点击互动、按住拖动、右键打开操作菜单（饱食度/好感度/购买食物/喂食/更换协议/更换桌宠/返回大屏）。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-col panel">
+        <div class="set-title">// 声音</div>
+        <div class="set-row"><span class="k">音效开关</span>
+          <label class="set-switch"><input type="checkbox" id="snd-enabled" ${G.profile.sound?.enabled !== false ? 'checked' : ''}/><span class="set-switch-text">${G.profile.sound?.enabled !== false ? '已开启' : '已关闭'}</span></label>
+        </div>
+        <div class="set-row"><span class="k">主音量</span>
+          <input type="range" id="snd-volume" min="0" max="100" value="${Math.round((G.profile.sound?.volume ?? 0.8) * 100)}"/>
+          <span class="dim" id="snd-vol-text">${Math.round((G.profile.sound?.volume ?? 0.8) * 100)}%</span>
+        </div>
+        <div class="set-actions">
+          <button class="btn btn-mini" id="btn-snd-test">试听</button>
+          <span class="set-status dim">音效实时生效并自动保存</span>
+        </div>
+      </div>
+      <div class="settings-col panel">
+        <div class="set-title">// 版本与更新</div>
+        <div class="set-row"><span class="k">当前版本</span>
+          <span id="upd-current" class="dim">读取中…</span>
+        </div>
+        <div class="set-note dim">打包版启动后会静默检查 GitHub 最新发布版；也可在此手动检查。发现新版本时可前往发布页手动下载安装包。</div>
+        <div class="set-actions">
+          <button class="btn btn-mini" id="btn-upd-check">检查更新</button>
+          <button class="btn btn-mini" id="btn-upd-open" style="display:none">前往下载</button>
+        </div>
+        <div class="set-status dim" id="upd-status"></div>
+        <div class="upd-result" id="upd-result" style="display:none">
+          <div class="upd-ver" id="upd-ver"></div>
+          <div class="upd-notes dim" id="upd-notes"></div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-foot">
+      <button class="btn btn-primary" id="btn-back">返回</button>
+    </div>
+  </div>`)
+  root.appendChild(cont)
+
+  const status = (sel, text, cls) => {
+    const s = cont.querySelector(sel)
+    s.textContent = text
+    s.className = 'set-status ' + (cls || 'dim')
+  }
+
+  // ── 版本与更新 ──
+  const updResult = cont.querySelector('#upd-result')
+  const updVer = cont.querySelector('#upd-ver')
+  const updNotes = cont.querySelector('#upd-notes')
+  const btnUpdOpen = cont.querySelector('#btn-upd-open')
+  const fmtDate = (iso) => {
+    try { return new Date(iso).toLocaleDateString('zh-CN') } catch { return '' }
+  }
+  function renderUpdateResult(res) {
+    if (!res?.ok || !res.latest) {
+      updResult.style.display = 'none'
+      btnUpdOpen.style.display = 'none'
+      return
+    }
+    updVer.textContent = res.updateAvailable
+      ? `发现新版本 v${res.latest.version}（发布于 ${fmtDate(res.latest.publishedAt)}）`
+      : `已是最新版本（远程 v${res.latest.version}）`
+    updNotes.textContent = (res.latest.notes || '').trim()
+    updResult.style.display = ''
+    btnUpdOpen.style.display = res.updateAvailable ? '' : 'none'
+  }
+  window.api?.appVersion?.().then((v) => {
+    cont.querySelector('#upd-current').textContent = `v${v}`
+  })
+  renderUpdateResult(getLastCheck()) // 回显启动静默检查结果（含红点来源）
+  cont.querySelector('#btn-upd-check').onclick = async () => {
+    status('#upd-status', '正在检查更新…（GitHub Releases）')
+    const res = await checkUpdate()
+    if (!res.ok) {
+      status('#upd-status', `检查失败：${res.error}`, 'err')
+      updResult.style.display = 'none'
+      return
+    }
+    if (res.updateAvailable) {
+      status('#upd-status', `发现新版本 v${res.latest.version}`, 'ok')
+      playSfx('toggle')
+    } else if (res.latest) {
+      status('#upd-status', `已是最新版本 ✓`, 'ok')
+    } else {
+      status('#upd-status', '远程仓库暂无发布版', 'ok')
+    }
+    renderUpdateResult(res)
+  }
+  btnUpdOpen.onclick = () => window.api.openReleasePage()
+
+  // ── AI配置保存与测试 ──
+  const readAiForm = () => ({
+    endpoint: cont.querySelector('#ai-endpoint').value.trim(),
+    apiKey: cont.querySelector('#ai-key').value.trim(),
+    model: cont.querySelector('#ai-model').value.trim()
+  })
+  cont.querySelector('#btn-ai-save').onclick = async () => {
+    G.profile.ai = readAiForm()
+    await saveProfile()
+    status('#ai-status', '已保存 ✓', 'ok')
+    setTimeout(() => status('#ai-status', ''), 1500)
+  }
+  cont.querySelector('#btn-ai-test').onclick = async () => {
+    G.profile.ai = readAiForm()
+    await saveProfile()
+    status('#ai-status', '连接测试中…')
+    const res = await aiChat([{ role: 'user', content: '回复"OK"两个字母即可。' }], 0)
+    if (res.ok) status('#ai-status', `连接成功：${res.content.slice(0, 40)}`, 'ok')
+    else status('#ai-status', `失败：${res.error}`, 'err')
+  }
+
+  // ── 自动协议方案池 ──
+  const OPERATOR_NAMES = { baseline: '基准', offset: '偏移', overflow: '溢出', parity: '奇偶' }
+  const WEAPON_NAMES = { standard: '标准协议骰组', heavy: '重核骰组', interferometer: '干涉仪骰组', ripple: '涟漪骰组' }
+
+  function renderConfigView(cfg) {
+    cfg = cfg || getActiveScheme()?.config || defaultAgentConfig()
+    const view = cont.querySelector('#agent-config-view')
+    const evRows = Object.entries(cfg.eventPriority).map(([id, r]) =>
+      `<div class="cfg-row"><span class="k">${id}</span><span>选项优先 [${r.prefer.join(',')}]${r.minFlux != null ? ` · 需通量≥${r.minFlux}` : ''}${r.minHpPct != null ? ` · 需生命≥${Math.round(r.minHpPct * 100)}%` : ''}</span></div>`).join('')
+    view.innerHTML = `
+      <div class="cfg-section dim">开局：${OPERATOR_NAMES[cfg.opening?.operator] || cfg.opening?.operator || '基准'} + ${WEAPON_NAMES[cfg.opening?.weapon] || cfg.opening?.weapon || '标准协议骰组'}</div>
+      <div class="cfg-section dim">事件优先级</div>${evRows}
+      <div class="cfg-section dim">商店：生命&lt;${Math.round(cfg.shop.healBelowPct * 100)}%先恢复 · 保留通量${cfg.shop.keepFlux}${cfg.shop.buyPoolExpand ? ' · 买扩容' : ''}${cfg.shop.buyDicePack ? ' · 买礼包' : ''}</div>
+      <div class="cfg-section dim">购买顺序：${cfg.shop.buyPriorities.join(' → ')}</div>
+      <div class="cfg-section dim">奖励关：[${cfg.rewardPriority.prefer.join(',')}]${cfg.rewardPriority.healBelowPct ? ` · 生命&lt;${Math.round(cfg.rewardPriority.healBelowPct * 100)}%先治疗` : ''}</div>
+      <div class="cfg-section dim">BOSS掉落：校验者[${cfg.bossLoot.verifier.join(',')}] 递归体[${cfg.bossLoot.recursion.join(',')}] 空引用[${cfg.bossLoot.nullref.join(',')}]</div>
+      <div class="cfg-section dim">核心放置：${cfg.corePriority.join(' → ')}</div>`
+  }
+
+  // 方案列表（含激活/重命名/删除操作）
+  function renderSchemeList() {
+    const listEl = cont.querySelector('#scheme-list')
+    listEl.innerHTML = ''
+    for (const sch of getSchemes()) {
+      const isActive = sch.id === G.profile.activeSchemeId
+      const row = el(`
+      <div class="scheme-row ${isActive ? 'active' : ''}" data-id="${sch.id}">
+        <span class="scheme-name" title="点击${isActive ? '收起' : '激活'}该方案">${isActive ? '● ' : ''}${sch.name}</span>
+        <span class="scheme-ops">
+          <button class="btn btn-mini" data-op="rename" title="重命名">✎</button>
+          <button class="btn btn-mini" data-op="copy" title="复制为新方案">⧉</button>
+          <button class="btn btn-mini btn-warn" data-op="del" title="删除">✕</button>
+        </span>
+      </div>`)
+      row.querySelector('.scheme-name').onclick = async () => {
+        if (!isActive) {
+          await activateScheme(sch.id)
+          playSfx('toggle')
+          status('#agent-status', `已切换方案：${sch.name} ✓`, 'ok')
+          renderSchemeList()
+          renderConfigView()
+        }
+      }
+      row.querySelectorAll('button').forEach((b) => {
+        b.onclick = async (e) => {
+          e.stopPropagation()
+          const op = b.dataset.op
+          if (op === 'rename') {
+            const name = prompt('方案名称：', sch.name)
+            if (name && name.trim()) {
+              await renameScheme(sch.id, name.trim())
+              status('#agent-status', '已重命名 ✓', 'ok')
+              renderSchemeList()
+            }
+          } else if (op === 'copy') {
+            const c = await createScheme(`${sch.name} 副本`, sch.config)
+            status('#agent-status', `已复制为：${c.name} ✓`, 'ok')
+            renderSchemeList()
+          } else if (op === 'del') {
+            if (confirm(`确定删除方案「${sch.name}」？`)) {
+              await deleteScheme(sch.id)
+              status('#agent-status', '已删除 ✓', 'ok')
+              renderSchemeList()
+              renderConfigView()
+            }
+          }
+        }
+      })
+      listEl.appendChild(row)
+    }
+  }
+  renderSchemeList()
+  renderConfigView()
+
+  // 新建（手动=复制默认）
+  cont.querySelector('#btn-scheme-new').onclick = async () => {
+    const name = prompt('方案名称：', '新方案')
+    if (!name || !name.trim()) return
+    await createScheme(name.trim(), defaultAgentConfig())
+    status('#agent-status', `已新建方案：${name.trim()}（默认配置，可用AI调整）✓`, 'ok')
+    renderSchemeList()
+  }
+
+  // AI 新建（AI命名+AI配置）
+  cont.querySelector('#btn-scheme-ai-new').onclick = async () => {
+    const pref = cont.querySelector('#agent-pref').value
+    status('#agent-status', 'AI新建方案中…（最长60秒）')
+    const res = await generateAgentConfig(pref)
+    if (!res.ok) { status('#agent-status', `新建失败：${res.error}`, 'err'); return }
+    const sch = await createScheme(res.name || 'AI方案', res.config)
+    status('#agent-status', `AI已创建方案「${sch.name}」（非法项已回落默认）✓`, 'ok')
+    renderSchemeList()
+  }
+
+  // AI 调整当前方案
+  cont.querySelector('#btn-scheme-ai-adjust').onclick = async () => {
+    const cur = getActiveScheme()
+    if (!cur) return
+    const pref = cont.querySelector('#agent-pref').value
+    status('#agent-status', `AI调整方案「${cur.name}」中…（最长60秒）`)
+    const res = await generateAgentConfig(pref, cur.config)
+    if (!res.ok) { status('#agent-status', `调整失败：${res.error}`, 'err'); return }
+    await updateScheme(cur.id, { name: res.name || cur.name, config: res.config })
+    status('#agent-status', `方案「${res.name || cur.name}」已更新（非法项已回落默认）✓`, 'ok')
+    renderSchemeList()
+    renderConfigView()
+  }
+
+  // ── 进化模式 ──
+  const evoEnabled = cont.querySelector('#evo-enabled')
+  const evoSwitchText = evoEnabled.closest('.set-switch').querySelector('.set-switch-text')
+  evoEnabled.onchange = async () => {
+    G.profile.evolution = evoEnabled.checked
+    evoSwitchText.textContent = evoEnabled.checked ? '已开启' : '已关闭'
+    playSfx('toggle')
+    await saveProfile()
+  }
+
+  // ── 小窗模式风格 ──
+  cont.querySelectorAll('.ms-opt').forEach((opt) => {
+    opt.onclick = async () => {
+      G.profile.miniStyle = opt.dataset.style === 'pet' ? 'pet' : 'hub'
+      playSfx('toggle')
+      await saveProfile()
+      cont.querySelectorAll('.ms-opt').forEach((o) => o.classList.toggle('active', o === opt))
+    }
+  })
+
+  // ── 声音设置 ──
+  const sndEnabled = cont.querySelector('#snd-enabled')
+  const sndVolume = cont.querySelector('#snd-volume')
+  const sndVolText = cont.querySelector('#snd-vol-text')
+  const sndSwitchText = cont.querySelector('.set-switch-text')
+  sndEnabled.onchange = async () => {
+    G.profile.sound.enabled = sndEnabled.checked
+    setSfxEnabled(sndEnabled.checked)
+    sndSwitchText.textContent = sndEnabled.checked ? '已开启' : '已关闭'
+    if (sndEnabled.checked) playSfx('toggle')
+    await saveProfile()
+  }
+  sndVolume.oninput = () => {
+    sndVolText.textContent = `${sndVolume.value}%`
+    setSfxVolume(sndVolume.value / 100)
+  }
+  sndVolume.onchange = async () => {
+    G.profile.sound.volume = sndVolume.value / 100
+    playSfx('click')
+    await saveProfile()
+  }
+  cont.querySelector('#btn-snd-test').onclick = () => {
+    playSfx('victory')
+  }
+
+  // 返回：局内（行动线）进入则回到行动线，否则回主菜单
+  cont.querySelector('#btn-back').onclick = () => show(params?.from === 'map' ? 'map' : 'menu')
+}
