@@ -1,5 +1,5 @@
 // Electron 主进程：无边框窗口与本地存档
-import { app, BrowserWindow, ipcMain, screen, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, shell, net } from 'electron'
 import { join, dirname } from 'node:path'
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -296,7 +296,9 @@ async function fetchLatestRelease() {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
   try {
-    const res = await fetch(GITHUB_LATEST_API, {
+    // net.fetch 走 Chromium 网络栈（系统证书库 + 系统代理）；Node 原生 fetch 不读系统证书，
+    // 在装有自定义根 CA（安全软件/代理拦截 TLS）的机器上会证书校验失败，表现为"检查失败"
+    const res = await net.fetch(GITHUB_LATEST_API, {
       headers: { 'User-Agent': 'Variable-Protocol-Updater', Accept: 'application/vnd.github+json' },
       signal: controller.signal
     })
