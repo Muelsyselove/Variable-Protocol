@@ -24,12 +24,31 @@ export const G = {
 const hasApi = typeof window !== 'undefined' && window.api
 
 // 桌宠仓库兜底（旧存档兼容）
+// v1.6.0 更名迁移：原「缪尔赛思」（金发水精灵立绘）更名为「洛涟」，id muelsyse → luolian
+const PET_ID_MIGRATE = { muelsyse: 'luolian' }
+
 function sanitizePet(p) {
   const base = { owned: {}, active: null, food: 0, satiety: {}, affection: {}, lastDecay: 0, lastInteract: 0 }
   const pet = { ...base, ...(p || {}) }
   pet.owned = pet.owned && typeof pet.owned === 'object' ? pet.owned : {}
   pet.satiety = pet.satiety && typeof pet.satiety === 'object' ? pet.satiety : {}
   pet.affection = pet.affection && typeof pet.affection === 'object' ? pet.affection : {}
+  // 旧 id 迁移：所有权、饱食度、好感度随迁
+  for (const [oldId, newId] of Object.entries(PET_ID_MIGRATE)) {
+    if (pet.owned[oldId]) {
+      pet.owned[newId] = true
+      delete pet.owned[oldId]
+    }
+    if (pet.satiety[oldId] != null && pet.satiety[newId] == null) {
+      pet.satiety[newId] = pet.satiety[oldId]
+      delete pet.satiety[oldId]
+    }
+    if (pet.affection[oldId] != null && pet.affection[newId] == null) {
+      pet.affection[newId] = pet.affection[oldId]
+      delete pet.affection[oldId]
+    }
+    if (pet.active === oldId) pet.active = newId
+  }
   return pet
 }
 

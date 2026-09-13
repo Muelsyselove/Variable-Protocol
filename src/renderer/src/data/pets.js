@@ -1,5 +1,5 @@
 // 桌宠图鉴：局外伙伴定义 + 状态机（立绘由用户生成提供）
-// 缪尔赛思
+// 缪尔赛思（v1.6.0 新立绘，参考官方美术重制）
 import mChibiNormal from '../assets/pets/muelsyse/Muelsyse-chibi.png'
 import mChibiHappy from '../assets/pets/muelsyse/Muelsyse-chibi-happy.png'
 import mChibiDispirited from '../assets/pets/muelsyse/Muelsyse-chibi-dispirited.png'
@@ -11,6 +11,18 @@ import mChibiCry from '../assets/pets/muelsyse/Muelsyse-chibi-cry.png'
 import mChibiDizziness from '../assets/pets/muelsyse/Muelsyse-chibi-dizziness.png'
 import mChibiTsundere from '../assets/pets/muelsyse/Muelsyse-chibi-tsundere.png'
 import mFullImg from '../assets/pets/muelsyse/Muelsyse-full.png'
+// 洛涟（原缪尔赛思立绘，v1.6.0 更名）
+import luChibiNormal from '../assets/pets/luolian/Luolian-chibi.png'
+import luChibiHappy from '../assets/pets/luolian/Luolian-chibi-happy.png'
+import luChibiDispirited from '../assets/pets/luolian/Luolian-chibi-dispirited.png'
+import luChibiQuery from '../assets/pets/luolian/Luolian-chibi-query.png'
+import luChibiEarnest from '../assets/pets/luolian/Luolian-chibi-earnest.png'
+import luChibiPonder from '../assets/pets/luolian/Luolian-chibi-ponder.png'
+import luChibiHunger from '../assets/pets/luolian/Luolian-chibi-hunger.png'
+import luChibiCry from '../assets/pets/luolian/Luolian-chibi-cry.png'
+import luChibiDizziness from '../assets/pets/luolian/Luolian-chibi-dizziness.png'
+import luChibiTsundere from '../assets/pets/luolian/Luolian-chibi-tsundere.png'
+import luFullImg from '../assets/pets/luolian/Luolian-full.png'
 // 璃珑（中国风龙少女）
 import lChibiNormal from '../assets/pets/lilong/Lilong-chibi.png'
 import lChibiHappy from '../assets/pets/lilong/Lilong-chibi-happy.png'
@@ -62,6 +74,19 @@ const chibisMuelsyse = {
   tsundere: mChibiTsundere
 }
 
+const chibisLuolian = {
+  normal: luChibiNormal,
+  happy: luChibiHappy,
+  dispirited: luChibiDispirited,
+  query: luChibiQuery,
+  earnest: luChibiEarnest,
+  ponder: luChibiPonder,
+  hunger: luChibiHunger,
+  cry: luChibiCry,
+  dizziness: luChibiDizziness,
+  tsundere: luChibiTsundere
+}
+
 const chibisLilong = {
   normal: lChibiNormal,
   happy: lChibiHappy,
@@ -110,7 +135,7 @@ export const PET_DEFS = [
         '今天的变量也由我来观察吧！',
         '生态科的工作可不能偷懒哦。',
         '要看看水的变化吗？',
-        '嗯嗯，记录：御灵在家很乖。'
+        '嗯嗯，记录：一切都在变量之中。'
       ],
       happy: [
         '哇，赢了赢了！',
@@ -166,6 +191,80 @@ export const PET_DEFS = [
         '这场战斗，交给你了！',
         '变量解析，开始！',
         '小心点，别太勉强哦。'
+      ]
+    }
+  },
+  {
+    id: 'luolian',
+    name: '洛涟',
+    title: '清波之涟 · 水精灵',
+    price: 600,
+    desc: '金发碧眼的亲水精灵，怀抱一颗晶莹水珠，所到之处清波荡漾。会在小窗模式陪伴你推进行动线，随战况与饱食度变换表情。',
+    chibis: chibisLuolian,
+    chibiImg: luChibiNormal,
+    fullImg: luFullImg,
+    quotes: {
+      idle: [
+        '清波荡漾，今天就交给我吧～',
+        '水珠说，它也想看看你的行动线！',
+        '要保持水润哦，干涸可不行。',
+        '听，水声在为你打拍子～',
+        '嗯嗯，记录：今天也是水灵灵的一天。'
+      ],
+      happy: [
+        '哇，赢了赢了！水花四溅～',
+        '水位上涨，心情满分！',
+        '干得漂亮！这颗水珠送给你！'
+      ],
+      dispirited: [
+        '呜……涟漪散开了。',
+        '水面变得好浑浊……',
+        '下次一定推得更远。'
+      ],
+      query: [
+        '这里需要你来决定哦？',
+        '下一步怎么走？',
+        '欸？轮到你操作了～'
+      ],
+      earnest: [
+        '战斗中，涟漪也绷紧了！',
+        '水纹观测，开始！',
+        '稳住，水势站在你这边。'
+      ],
+      ponder: [
+        '唔……让我想想。',
+        '对着水面发会儿呆……',
+        '这个选择，值得思索。'
+      ],
+      hunger: [
+        '肚子有点饿了……',
+        '想吃点生态口粮……',
+        '水位在下降哦。'
+      ],
+      cry: [
+        '呜呜，快饿坏了……',
+        '口粮……口粮在哪里……',
+        '再不喂我，眼泪都要汇成小水洼了！'
+      ],
+      dizziness: [
+        '（饿晕了，没有回应）',
+        '……zZZ……',
+        '（水精灵失去了意识）'
+      ],
+      tsundere: [
+        '干、干嘛戳我！',
+        '哼，才不是为了你才留下来的！',
+        '别乱摸啦！……水珠都晃起来了。'
+      ],
+      feed: [
+        '开动啦～',
+        '这个味道，是清泉的感觉！',
+        '水量回升！工作效率UP！'
+      ],
+      battle: [
+        '这场战斗，交给你了！',
+        '水纹观测，开始！',
+        '稳住，水势站在你这边。'
       ]
     }
   },
