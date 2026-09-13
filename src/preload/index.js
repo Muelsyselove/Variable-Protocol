@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('api', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   closeWindow: () => ipcRenderer.invoke('window:close'),
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
+  // 数据目录（存档保存位置）
+  getDataDir: () => ipcRenderer.invoke('data:getDir'),
+  chooseDataDir: () => ipcRenderer.invoke('data:chooseDir'),
+  resetDataDir: () => ipcRenderer.invoke('data:resetDir'),
   // 应用内更新检查（GitHub Releases）
   appVersion: () => ipcRenderer.invoke('app:version'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),

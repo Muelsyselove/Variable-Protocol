@@ -95,6 +95,16 @@ function renderSettings(root, params) {
         </div>
       </div>
       <div class="settings-col panel">
+        <div class="set-title">// 数据目录</div>
+        <div class="set-note dim">存档（档案与对局数据）的保存位置。更改时自动把现有存档迁移到新目录，原位置保留为备份，不删除任何数据；不可指向安装目录内（升级/卸载会整目录删除）。切换后建议重启以完全生效。</div>
+        <div class="data-dir-path" id="data-dir-path">读取中…</div>
+        <div class="set-actions">
+          <button class="btn btn-mini" id="btn-data-dir-choose">更改数据目录…</button>
+          <button class="btn btn-mini" id="btn-data-dir-reset">恢复默认位置</button>
+        </div>
+        <div class="set-status dim" id="data-dir-status"></div>
+      </div>
+      <div class="settings-col panel">
         <div class="set-title">// 版本与更新</div>
         <div class="set-row"><span class="k">当前版本</span>
           <span id="upd-current" class="dim">读取中…</span>
@@ -167,6 +177,38 @@ function renderSettings(root, params) {
     renderUpdateResult(res)
   }
   btnUpdOpen.onclick = () => window.api.openReleasePage()
+
+  // ── 数据目录 ──
+  const dataDirPath = cont.querySelector('#data-dir-path')
+  const btnDataReset = cont.querySelector('#btn-data-dir-reset')
+  function renderDataDir(st) {
+    if (!st?.current) return
+    dataDirPath.textContent = st.current + (st.isDefault ? '（默认）' : '（自定义）')
+    dataDirPath.title = st.current
+    btnDataReset.disabled = !!st.isDefault
+  }
+  window.api.getDataDir?.().then(renderDataDir)
+  cont.querySelector('#btn-data-dir-choose').onclick = async () => {
+    const res = await window.api.chooseDataDir()
+    if (res.canceled) return
+    if (!res.ok) {
+      status('#data-dir-status', res.error, 'err')
+      return
+    }
+    renderDataDir(res)
+    status('#data-dir-status', '存档已迁移并切换目录（建议重启以完全生效）✓', 'ok')
+    playSfx('toggle')
+  }
+  btnDataReset.onclick = async () => {
+    const res = await window.api.resetDataDir()
+    if (!res.ok) {
+      status('#data-dir-status', res.error, 'err')
+      return
+    }
+    renderDataDir(res)
+    status('#data-dir-status', '已迁回默认位置（建议重启以完全生效）✓', 'ok')
+    playSfx('toggle')
+  }
 
   // ── AI配置保存与测试 ──
   const readAiForm = () => ({

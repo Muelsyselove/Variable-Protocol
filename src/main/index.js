@@ -1,10 +1,66 @@
 // Electron 主进程：无边框窗口与本地存档
-import { app, BrowserWindow, ipcMain, screen, shell, net } from 'electron'
-import { join, dirname } from 'node:path'
+import { app, BrowserWindow, ipcMain, screen, shell, net, dialog } from 'electron'
+import { join, dirname, resolve, relative, isAbsolute } from 'node:path'
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = import.meta.dirname ?? fileURLToPath(new URL('.', import.meta.url))
+
+// ══════════ 数据目录重定向（须先于一切窗口/存档访问执行） ══════════
+// 自定义数据目录记录在默认 userData 下的指针文件（datapath.json）中，启动时最先读取并 setPath。
+// 安全省则（源自 v1.1.x 清档事故：数据存安装目录，NSIS 升级整目录删除）：
+//   1) 拒绝指向安装目录内的任何位置；
+//   2) 切换目录只复制迁移 saves，原位置保留为备份，任何路径上都不删除用户数据。
+const defaultUserData = app.getPath('userData')
+let dataDirOverride = null
+let dataDirFallbackNotice = null
+
+function pointerFile() {
+  return join(defaultUserData, 'datapath.json')
+}
+
+// 是否位于安装目录内（安装目录 = 可执行文件所在目录）
+function isInsideInstallDir(dir) {
+  const rel = relative(resolve(dirname(process.execPath)), resolve(dir))
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+// 校验候选数据目录：不在安装目录内、可创建、可读写
+function isValidDataDir(dir) {
+  if (isInsideInstallDir(dir)) return false
+  try {
+    mkdirSync(join(dir, 'saves'), { recursive: true })
+    const probe = join(dir, '.vp-write-test')
+    writeFileSync(probe, 'ok', 'utf-8')
+    rmSync(probe)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function readPointer() {
+  try {
+    let text = readFileSync(pointerFile(), 'utf-8')
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1) // 剥离 BOM
+    const dir = JSON.parse(text)?.dir
+    return typeof dir === 'string' && dir.trim() ? dir.trim() : null
+  } catch {
+    return null // 指针不存在/损坏 = 使用默认位置
+  }
+}
+
+{
+  const want = readPointer()
+  if (want) {
+    if (isValidDataDir(want)) {
+      dataDirOverride = want
+      app.setPath('userData', want)
+    } else {
+      dataDirFallbackNotice = want // 目录失效（换盘/被删），回退默认，就绪后提示
+    }
+  }
+}
 
 // 打包版：用户数据（存档、缓存、运行时状态）存标准 %APPDATA%（默认 userData，不重定向）。
 // v1.1.x 曾重定向到安装目录下 data 文件夹，但 NSIS 升级安装会先卸载旧版并整目录删除，
@@ -98,6 +154,65 @@ ipcMain.handle('save:read', (_e, file) => {
 ipcMain.handle('save:delete', (_e, file) => {
   try { rmSync(join(savesDir(), file)) } catch { /* 忽略不存在 */ }
   return true
+})
+
+// ── 数据目录：查询 / 更改 / 恢复默认 ──
+function dataDirState() {
+  const current = app.getPath('userData')
+  return { current, isDefault: resolve(current) === resolve(defaultUserData), default: defaultUserData }
+}
+
+// 把当前 saves 复制到目标目录（不删源，原位置保留为备份）
+function migrateSavesTo(dir) {
+  const src = join(app.getPath('userData'), 'saves')
+  if (existsSync(src)) cpSync(src, join(dir, 'saves'), { recursive: true })
+}
+
+function applyDataDir(rawDir) {
+  const raw = String(rawDir || '').trim()
+  if (!raw) return { ok: false, error: '路径为空' }
+  const target = resolve(raw)
+  const current = resolve(app.getPath('userData'))
+  if (target.toLowerCase() === current.toLowerCase()) return { ok: false, error: '该目录已是当前数据目录' }
+  if (isInsideInstallDir(target)) {
+    return { ok: false, error: '不能选择安装目录内的位置：升级/卸载会整目录删除该位置的数据' }
+  }
+  if (!isValidDataDir(target)) return { ok: false, error: '目录无法创建或不可写' }
+  try {
+    migrateSavesTo(target)
+  } catch (err) {
+    return { ok: false, error: '存档迁移失败：' + (err?.message || err) }
+  }
+  if (target.toLowerCase() === resolve(defaultUserData).toLowerCase()) {
+    try { rmSync(pointerFile()) } catch { /* 指针不存在则忽略 */ }
+    dataDirOverride = null
+  } else {
+    try {
+      writeFileSync(pointerFile(), JSON.stringify({ dir: target }, null, 2), 'utf-8')
+    } catch (err) {
+      return { ok: false, error: '写入指针文件失败：' + (err?.message || err) }
+    }
+    dataDirOverride = target
+  }
+  app.setPath('userData', dataDirOverride || defaultUserData)
+  return { ok: true, ...dataDirState() }
+}
+
+ipcMain.handle('data:getDir', () => dataDirState())
+
+ipcMain.handle('data:chooseDir', async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: '选择数据目录（存档保存位置）',
+    defaultPath: app.getPath('userData'),
+    properties: ['openDirectory', 'createDirectory']
+  })
+  if (res.canceled || !res.filePaths?.[0]) return { ok: false, canceled: true }
+  return applyDataDir(res.filePaths[0])
+})
+
+ipcMain.handle('data:resetDir', () => {
+  if (!dataDirOverride) return { ok: false, error: '已是默认位置' }
+  return applyDataDir(defaultUserData)
 })
 
 // 小窗模式：切换窗口尺寸（小窗 460×400 / 常规 1280×840）
@@ -337,6 +452,15 @@ ipcMain.handle('update:openRelease', async () => {
 // 启动静默检查：仅打包版，延迟 30 秒避开启动高峰；发现新版本时推送渲染层（菜单设置入口红点）
 app.whenReady().then(() => {
   createWindow()
+  // 自定义数据目录失效（换盘/被删）：已回退默认位置，弹窗告知避免"存档消失"困惑
+  if (dataDirFallbackNotice) {
+    dialog.showMessageBox(win, {
+      type: 'warning',
+      title: '数据目录不可用',
+      message: `自定义数据目录不可用：\n${dataDirFallbackNotice}\n\n已回退到默认位置：${defaultUserData}\n可在「系统设置 → 数据目录」重新指定。`,
+      buttons: ['知道了']
+    })
+  }
   if (app.isPackaged) {
     setTimeout(async () => {
       const res = await fetchLatestRelease()

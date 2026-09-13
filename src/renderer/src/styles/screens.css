@@ -825,6 +825,18 @@ body.mini-mode .screen-gameover .go-quote { display: none; }
   margin-bottom: 10px;
 }
 .set-note { font-size: 12px; line-height: 1.7; margin-bottom: 14px; }
+/* 数据目录面板：路径等宽小字、可断行 */
+.data-dir-path {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  word-break: break-all;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
 /* 版本与更新面板 */
 .upd-result { margin-top: 12px; border: 1px solid var(--line); padding: 12px 14px; background: rgba(0, 0, 0, 0.3); }
 .upd-ver { font-family: var(--mono); font-size: 13px; color: var(--green); margin-bottom: 8px; }
