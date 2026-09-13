@@ -1,5 +1,13 @@
 /* ============ 各屏幕样式 ============ */
 
+/* ---- 滚动容器禁用横向滚动 ---- */
+/* 这些容器声明了 overflow-y: auto（overflow-x 隐式同为 auto），内容横向略超出即出现无意义的横向滚动条。
+   本项目所有列表/面板只需纵向滚动，统一隐藏横向滚动条（超出部分裁剪，不显示滚动条） */
+.select-detail, .map-view-panel, .log-feed, .settings-body, .upd-notes,
+.agent-config-view, .ps-col, .ps-body, .codex-body {
+  overflow-x: hidden;
+}
+
 /* ---- 主菜单：明日方舟式布局（左立绘名片 + 顶部资源胶囊条 + 右侧阶梯块状按钮群） ---- */
 .screen-menu { display: block; }
 

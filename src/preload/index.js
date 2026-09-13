@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('api', {
   setMini: (mini) => ipcRenderer.invoke('window:setMini', mini),
   setAlwaysOnTop: (flag) => ipcRenderer.invoke('window:setAlwaysOnTop', flag),
   minimize: () => ipcRenderer.invoke('window:minimize'),
+  toggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),
+  onMaximizeChange: (cb) => ipcRenderer.on('window:maximized', (_e, v) => cb(v)),
   closeWindow: () => ipcRenderer.invoke('window:close'),
   aiChat: (payload) => ipcRenderer.invoke('ai:chat', payload),
   // 数据目录（存档保存位置）

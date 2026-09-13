@@ -127,6 +127,12 @@ function createWindow() {
   if (iconPath) {
     try { win.setIcon(iconPath) } catch { /* 图标设置失败不影响运行 */ }
   }
+  // 最大化状态变化（含 Aero Snap 拖拽贴边、标题栏双击等外部触发）：推送渲染层同步按钮图标
+  const pushMaximized = (v) => {
+    if (win && !win.isDestroyed()) win.webContents.send('window:maximized', v)
+  }
+  win.on('maximize', () => pushMaximized(true))
+  win.on('unmaximize', () => pushMaximized(false))
 }
 
 function savesDir() {
@@ -245,6 +251,14 @@ ipcMain.handle('window:minimize', () => {
 ipcMain.handle('window:close', () => {
   win?.close()
   return true
+})
+
+// 最大化 / 还原切换（返回当前是否最大化，供按钮图标同步）
+ipcMain.handle('window:toggleMaximize', () => {
+  if (!win) return false
+  if (win.isMaximized()) win.unmaximize()
+  else win.maximize()
+  return win.isMaximized()
 })
 
 // ══════════ 桌宠悬浮窗（透明无边框独立窗口） ══════════

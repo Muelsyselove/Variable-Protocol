@@ -76,6 +76,10 @@ html, body {
 .tb-btn:hover { background: var(--line); color: var(--ink); }
 .tb-close:hover { background: #c0392b; color: #fff; }
 .tb-btn svg { display: block; margin: 0 auto; }
+/* 最大化/还原图标切换：最大化状态下显示还原图标 */
+.tb-max .ic-restore { display: none; }
+.tb-max.maximized .ic-max { display: none; }
+.tb-max.maximized .ic-restore { display: block; }
 .tb-pin.active { color: var(--amber); }
 .tb-pin.active svg path:first-child { transform: rotate(45deg); transform-origin: 8px 4.75px; }
 .tb-pin:hover { color: var(--amber); }

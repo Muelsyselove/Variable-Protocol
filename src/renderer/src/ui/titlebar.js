@@ -24,6 +24,15 @@ export function ensureTitlebar() {
           <circle cx="8" cy="13.6" r="1.1" fill="currentColor"/>
         </svg>
       </button>
+      <button class="tb-btn tb-max" id="tb-max" style="display:none" title="最大化 / 还原">
+        <svg class="ic-max" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1.5" y="1.5" width="9" height="9" stroke="currentColor" stroke-width="1.3"/>
+        </svg>
+        <svg class="ic-restore" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1.5" y="3.5" width="7" height="7" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M3.5 1.5 H10.5 V8.5" stroke="currentColor" stroke-width="1.3"/>
+        </svg>
+      </button>
       <button class="tb-btn tb-min" id="tb-min" title="最小化">─</button>
       <button class="tb-btn tb-close" id="tb-close" title="关闭">✕</button>
     </div>
@@ -31,6 +40,12 @@ export function ensureTitlebar() {
   document.body.appendChild(titlebarEl)
   titlebarEl.querySelector('#tb-min').onclick = () => hasApi && window.api.minimize()
   titlebarEl.querySelector('#tb-close').onclick = () => hasApi && window.api.closeWindow()
+  // 最大化状态由主进程推送（含 Aero Snap/双击标题栏等外部触发），保持图标同步
+  if (hasApi) {
+    window.api.onMaximizeChange?.((v) => {
+      titlebarEl.querySelector('#tb-max')?.classList.toggle('maximized', !!v)
+    })
+  }
   return titlebarEl
 }
 
@@ -43,9 +58,17 @@ export function updateTitlebar() {
   const enterBtn = titlebarEl.querySelector('#tb-mini-toggle')
   const exitBtn = titlebarEl.querySelector('#tb-exit-mini')
   const pinBtn = titlebarEl.querySelector('#tb-pin')
+  const maxBtn = titlebarEl.querySelector('#tb-max')
   enterBtn.style.display = (!mini && inRun) ? '' : 'none'
   exitBtn.style.display = mini ? '' : 'none'
   pinBtn.style.display = mini ? '' : 'none'
+  // 最大化仅大屏模式提供；小窗固定 460×400 不参与最大化
+  maxBtn.style.display = (!mini && hasApi) ? '' : 'none'
+  maxBtn.onclick = async () => {
+    if (!hasApi) return
+    const maximized = await window.api.toggleMaximize()
+    maxBtn.classList.toggle('maximized', !!maximized)
+  }
   pinBtn.classList.toggle('active', !!run?.settings?.alwaysOnTop)
 
   // 进入小窗：随时切入（自动启用自动协议）

@@ -363,7 +363,9 @@ function renderSettings(root, params) {
   const sndEnabled = cont.querySelector('#snd-enabled')
   const sndVolume = cont.querySelector('#snd-volume')
   const sndVolText = cont.querySelector('#snd-vol-text')
-  const sndSwitchText = cont.querySelector('.set-switch-text')
+  // 必须限定在声音开关自身内部取文字节点：容器里有多个 .set-switch-text（进化模式在前），
+  // 直接全局 querySelector 会取到进化模式的文字，导致声音开关文字不随状态更新
+  const sndSwitchText = sndEnabled.closest('.set-switch').querySelector('.set-switch-text')
   sndEnabled.onchange = async () => {
     G.profile.sound.enabled = sndEnabled.checked
     setSfxEnabled(sndEnabled.checked)
