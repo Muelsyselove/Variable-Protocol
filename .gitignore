@@ -3,6 +3,7 @@ node_modules/
 out/
 dist/
 dist2/
+dist3/
 *.log
 
 # IDE / 工具配置
