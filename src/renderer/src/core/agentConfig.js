@@ -5,8 +5,9 @@ import { TRANSLATORS } from '../data/translators.js'
 import { OPERATORS } from '../data/operators.js'
 import { WEAPONS } from '../data/weapons.js'
 
-const OP_IDS = new Set(OPERATORS.map((o) => o.id))
-const WPN_IDS = new Set(WEAPONS.map((w) => w.id))
+// 资源外部化后数据为异步加载填充：id 集合改为惰性读取（调用时点数据已就绪）
+const opIds = () => new Set(OPERATORS.map((o) => o.id))
+const wpnIds = () => new Set(WEAPONS.map((w) => w.id))
 
 // ── 默认优先级（均衡策略） ──
 export function defaultAgentConfig() {
@@ -55,8 +56,10 @@ export function sanitizeAgentConfig(raw) {
   try {
     // 开局选择：干员/武器id校验
     const op = raw.opening?.operator
-    const wp = raw.opening?.weapon
-    if (OP_IDS.has(op) || WPN_IDS.has(wp)) {
+    const wpn = raw.opening?.weapon
+    const OP_IDS = opIds()
+    const WPN_IDS = wpnIds()
+    if (OP_IDS.has(op) || WPN_IDS.has(wpn)) {
       out.opening = {
         operator: OP_IDS.has(op) ? op : def.opening.operator,
         weapon: WPN_IDS.has(wp) ? wp : def.opening.weapon

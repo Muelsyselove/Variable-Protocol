@@ -2,12 +2,14 @@
 import { serializeRun, deserializeRun } from './core/run.js'
 import { setRngState, rngState } from './core/rng.js'
 import { sanitizeSchemes } from './core/schemes.js'
+import { migratePetIds } from './core/petMigrate.js'
 
 export const G = {
   run: null,
   hasSave: false,
   lastBattle: null,   // 末场战斗信息（进化模式报告用）
   profile: {
+    profileVersion: 2,                                    // 玩家档案 schema 版本（v2 起记录，供未来迁移链）
     bestLayer: 0, totalRuns: 0, totalKills: 0,
     coins: 0,                                            // 局外货币：算力币
     pet: { owned: {}, active: null, food: 0, satiety: {}, affection: {}, lastDecay: 0, lastInteract: 0 },  // 桌宠仓库
@@ -24,32 +26,23 @@ export const G = {
 const hasApi = typeof window !== 'undefined' && window.api
 
 // 桌宠仓库兜底（旧存档兼容）
-// v1.6.0 更名迁移：原「缪尔赛思」（金发水精灵立绘）更名为「洛涟」，id muelsyse → luolian
+// v1.6.0 更名迁移表：原「缪尔赛思」（金发水精灵立绘）更名为「洛涟」，id muelsyse → luolian。
+// v2.0.0 修复：新桌宠「缪尔赛思」复用了旧 id muelsyse，旧版无条件迁移会在每次启动时把
+// 新购买误当旧数据迁走删除（购买丢失 bug 根因）。现改为仅在旧 id 已从定义表退役时迁移（见 core/petMigrate.js）。
 const PET_ID_MIGRATE = { muelsyse: 'luolian' }
 
+// 已知桌宠 id 集合由入口注入（不在此静态导入 data/pets.js：其图片静态导入无法在 Node 测试环境解析；
+// 资源化后定义表为异步加载，注入 provider 也可保证读取时点正确）。未注入时视为定义表为空 → 不迁移，防误删。
+let petKnownIds = () => new Set()
+export function setPetKnownIdsProvider(fn) { petKnownIds = fn }
+
 function sanitizePet(p) {
-  const base = { owned: {}, active: null, food: 0, satiety: {}, affection: {}, lastDecay: 0, lastInteract: 0 }
+  const base = { owned: {}, active: null, food: 0, satiety: {}, affection: {}, lastDecay: 0, lastInteract: 0, migrations: [] }
   const pet = { ...base, ...(p || {}) }
   pet.owned = pet.owned && typeof pet.owned === 'object' ? pet.owned : {}
   pet.satiety = pet.satiety && typeof pet.satiety === 'object' ? pet.satiety : {}
   pet.affection = pet.affection && typeof pet.affection === 'object' ? pet.affection : {}
-  // 旧 id 迁移：所有权、饱食度、好感度随迁
-  for (const [oldId, newId] of Object.entries(PET_ID_MIGRATE)) {
-    if (pet.owned[oldId]) {
-      pet.owned[newId] = true
-      delete pet.owned[oldId]
-    }
-    if (pet.satiety[oldId] != null && pet.satiety[newId] == null) {
-      pet.satiety[newId] = pet.satiety[oldId]
-      delete pet.satiety[oldId]
-    }
-    if (pet.affection[oldId] != null && pet.affection[newId] == null) {
-      pet.affection[newId] = pet.affection[oldId]
-      delete pet.affection[oldId]
-    }
-    if (pet.active === oldId) pet.active = newId
-  }
-  return pet
+  return migratePetIds(pet, petKnownIds(), PET_ID_MIGRATE)
 }
 
 // 饱食度随真实时间衰减（每30分钟 -1，下限0），在读取存档与渲染桌宠前调用
@@ -79,6 +72,7 @@ export async function initProfile() {
     if (G.profile.miniStyle !== 'pet') G.profile.miniStyle = 'hub'
     G.profile.evolution = !!G.profile.evolution
     G.profile.chainBattle = !!G.profile.chainBattle
+    G.profile.profileVersion = 2 // v1 存档（无版本字段）经上述清洗后统一升 v2
   } else if (new URLSearchParams(location.search).get('pkg') === '1') {
     // 打包版新档开局赠礼：赠送 1000 算力币（仅首次建档，旧档/开发版不受影响）
     G.profile.coins = 1000

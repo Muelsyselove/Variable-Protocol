@@ -7,8 +7,10 @@ files:
   - out/**
   - "!**/node_modules/**"
 asar: true
-# icon.ico/png 通过 extraResources 放到 asar 外的 resources 目录：
-# Windows 任务栏/窗口图标 API 需要磁盘真实路径，asar 归档内的 ico 无法被读取（表现为任务栏空白图标）
+# icon.ico/png 与游戏资源包（resources/game：数据 JSON + 全部图片）通过 extraResources 放到 asar 外：
+# 1) Windows 任务栏/窗口图标 API 需要磁盘真实路径，asar 归档内的 ico 无法被读取（表现为任务栏空白图标）
+# 2) v2.0.0 起游戏资源与核心分离——资源在 asar 外可独立替换/更新（服务器资源更新写入数据目录覆盖层，
+#    版本更高时优先于安装基线生效，见 src/main/resources.js）
 extraResources:
   - from: resources
     to: .

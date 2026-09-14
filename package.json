@@ -1,6 +1,6 @@
 {
   "name": "variable-protocol",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "description": "变量协议：回合制骰子肉鸽",
   "main": "out/main/index.js",
   "type": "module",
@@ -8,7 +8,13 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "test": "node test/smoke.mjs",
+    "test": "node test/smoke.mjs && node test/resourceLint.mjs",
+    "lint:resources": "node test/resourceLint.mjs",
+    "gen:manifest": "node scripts/gen-resource-manifest.mjs",
+    "mock-server": "node scripts/mock-server.mjs",
+    "server": "node server/server.mjs",
+    "server:admin": "node server/admin.mjs",
+    "server:selftest": "node server/selftest.mjs",
     "dist": "electron-vite build && electron-builder --win nsis"
   },
   "dependencies": {

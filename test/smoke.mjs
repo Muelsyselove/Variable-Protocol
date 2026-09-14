@@ -1,5 +1,7 @@
 // 核心逻辑烟雾测试（Node 环境运行，不依赖渲染层）
 // 运行：node test/smoke.mjs
+import { loadGameDataFromRepo } from './loadGameData.mjs'
+loadGameDataFromRepo() // 资源外部化后：先从仓库资源包加载填充各数据注册表
 import { computeAttribute, computeEffAttrs } from '../src/renderer/src/core/attributes.js'
 import { typeFormula, DamageType } from '../src/renderer/src/core/damage.js'
 import { seedRNG, rng, rngInt } from '../src/renderer/src/core/rng.js'
@@ -14,6 +16,7 @@ import { TRANSLATORS, NORMAL_POOL, BOSS_POOLS } from '../src/renderer/src/data/t
 import { SPECIAL_DICE } from '../src/renderer/src/data/diceDefs.js'
 import { addTranslator } from '../src/renderer/src/data/events.js'
 import { defaultAgentConfig, sanitizeAgentConfig, decideEventOption, decideBossLoot, decideRewardOption, decideShopActions, decideCoreSlot } from '../src/renderer/src/core/agentConfig.js'
+import { migratePetIds } from '../src/renderer/src/core/petMigrate.js'
 
 let passed = 0, failed = 0
 function assert(cond, name) {
@@ -218,19 +221,27 @@ console.log('— 自动代理优先级 —')
   assert(bad.corePriority.length === 3 && bad.shop.keepFlux === 60, '非法配置项回落默认')
 }
 
-console.log('— v0.23.0 扩充内容：数量核对 —')
+console.log('— 资源规模与一致性（动态校验：规模只设下限防数据丢失，内容增长无需改测试） —')
 {
-  // 旧件23（普通11/核心3/高阶9）+ 新增81（普通60/核心6/高阶15）= 104
-  assert(Object.keys(TRANSLATORS).length === 104, `转译器总数 104（实际 ${Object.keys(TRANSLATORS).length}）`)
-  assert(Object.keys(SPECIAL_DICE).length === 51, `特殊骰总数 51（实际 ${Object.keys(SPECIAL_DICE).length}）`)
-  assert(NORMAL_POOL.length === 71, `普通转译器 71（实际 ${NORMAL_POOL.length}）`)
-  assert(Object.values(TRANSLATORS).filter((t) => t.tier === 'core').length === 9, '核心转译器 9 个')
-  assert(Object.values(TRANSLATORS).filter((t) => t.tier === 'high').length === 24, '高阶转译器 24 个')
-  assert(BOSS_POOLS.verifier.length === 8 && BOSS_POOLS.recursion.length === 8 && BOSS_POOLS.nullref.length === 8, '各BOSS高阶池 8 个')
+  const tl = Object.values(TRANSLATORS)
+  // 规模下限：以当前资源包规模为底线（捕获数据文件损坏/漏加载/误删；新增内容不受限）
+  assert(Object.keys(TRANSLATORS).length >= 104, `转译器总数 ≥104（实际 ${Object.keys(TRANSLATORS).length}）`)
+  assert(Object.keys(SPECIAL_DICE).length >= 51, `特殊骰总数 ≥51（实际 ${Object.keys(SPECIAL_DICE).length}）`)
+  assert(NORMAL_POOL.length >= 71, `普通转译器 ≥71（实际 ${NORMAL_POOL.length}）`)
+  assert(tl.filter((t) => t.tier === 'core').length >= 9, '核心转译器 ≥9 个')
+  assert(tl.filter((t) => t.tier === 'high').length >= 24, '高阶转译器 ≥24 个')
+  assert(['verifier', 'recursion', 'nullref'].every((b) => BOSS_POOLS[b].length >= 8), '各BOSS高阶池 ≥8 个')
+  assert(tl.filter((t) => t.synergy).length >= 18, '连携型转译器 ≥18 个')
+  // 派生一致性：加载/编译无遗漏（普通池与 normal 层互为镜像）
+  assert(NORMAL_POOL.length === tl.filter((t) => t.tier === 'normal').length
+    && NORMAL_POOL.every((t) => t.tier === 'normal'), '普通池与 normal 层完全一致')
+  assert(Object.entries(BOSS_POOLS).every(([boss, ids]) => ids.every((id) => TRANSLATORS[id]?.boss === boss)), 'BOSS池id与归属一致')
+  // id 唯一与引用完整
+  assert(new Set(tl.map((t) => t.id)).size === tl.length, '转译器 id 唯一')
+  assert(tl.every((t) => !t.synergy || t.synergy.requires.every((id) => TRANSLATORS[id])), '连携 requires 引用的转译器全部存在')
+  // 设计契约（不随内容增长放宽）
   assert(NORMAL_POOL.every((t) => [60, 90, 120, 150].includes(t.price)), '普通转译器定价仅 60/90/120/150 四档')
-  assert(Object.values(TRANSLATORS).filter((t) => t.synergy).length === 18, '连携型转译器 18 个')
-  const bossIds = { verifier: 'verifier', recursion: 'recursion', nullref: 'nullref' }
-  assert(Object.entries(BOSS_POOLS).every(([boss, ids]) => ids.every((id) => TRANSLATORS[id].boss === bossIds[boss])), 'BOSS池id与归属一致')
+  assert(tl.every((t) => ['normal', 'core', 'high'].includes(t.tier) && t.desc), '转译器 tier 枚举与 desc 字段完整')
 }
 
 console.log('— v0.23.0 扩充内容：新fx引擎专项 —')
@@ -465,6 +476,39 @@ console.log('— v0.23.0 扩充内容：胜利结算钩子 —')
   const before = run3.flux
   afterBattleVictory(run3, { ally: { hp: 1000 }, _bonusFlux: 0 })
   assert(run3.flux - before >= 100, '连携：复利计息上限50→100')
+}
+
+console.log('— v2.0.0 桌宠存档迁移（购买丢失 bug 修复） —')
+{
+  const MIGRATE = { muelsyse: 'luolian' }
+  const liveIds = ['muelsyse', 'luolian', 'lilong', 'jingxi'] // 当前定义表：muelsyse 已被新缪尔赛思复用
+  // 场景1：购买新缪尔赛思（owned.muelsyse）→ 重启清洗 → 必须保留（bug 修复核心验收）
+  const bought = migratePetIds(
+    { owned: { muelsyse: true }, active: 'muelsyse', satiety: { muelsyse: 50 }, affection: { muelsyse: 3 } },
+    liveIds, MIGRATE
+  )
+  assert(bought.owned.muelsyse === true && bought.owned.luolian === undefined, '购买新缪尔赛思：活 id 不迁移，所有权保留')
+  assert(bought.active === 'muelsyse' && bought.satiety.muelsyse === 50 && bought.affection.muelsyse === 3, '购买新缪尔赛思：装备/饱食度/好感度完整保留')
+  // 场景2：未来 id 退役（muelsyse 从定义表移除）→ 旧数据一次性迁移到 luolian
+  const retired = migratePetIds(
+    { owned: { muelsyse: true }, active: 'muelsyse', satiety: { muelsyse: 40 }, affection: {} },
+    ['luolian', 'lilong', 'jingxi'], MIGRATE
+  )
+  assert(retired.owned.luolian === true && retired.owned.muelsyse === undefined, 'id 退役：所有权迁移至新 id')
+  assert(retired.active === 'luolian' && retired.satiety.luolian === 40, 'id 退役：装备与饱食度随迁')
+  assert(Array.isArray(retired.migrations) && retired.migrations.includes('muelsyse->luolian'), '迁移记录写入 migrations 数组')
+  // 场景3：已迁移过的存档再次清洗 → 幂等，不重复处理
+  const again = migratePetIds(
+    { owned: { luolian: true, muelsyse: true }, active: 'luolian', satiety: {}, affection: {}, migrations: ['muelsyse->luolian'] },
+    ['luolian', 'lilong', 'jingxi'], MIGRATE
+  )
+  assert(again.owned.luolian === true && again.owned.muelsyse === true, '已迁移记录：同一条目只执行一次（幂等）')
+  // 场景4：定义表未加载（资源缺失）→ 跳过迁移，不误删
+  const noDefs = migratePetIds(
+    { owned: { muelsyse: true }, active: 'muelsyse', satiety: {}, affection: {} },
+    [], MIGRATE
+  )
+  assert(noDefs.owned.muelsyse === true, '定义表为空：跳过迁移，数据原样保留')
 }
 
 console.log(`\n结果：${passed} 通过，${failed} 失败`)

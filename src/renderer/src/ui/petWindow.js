@@ -110,6 +110,8 @@ function updateIgnore(x, y) {
 // ── 命中检测：客户端坐标 → 立绘画布坐标 → alpha ──
 function updateHitImage(src) {
   const im = new Image()
+  // game:// 与页面源不同源：需 CORS 模式加载（协议端已返回 ACAO:*），否则画布被污染导致 getImageData 失败
+  im.crossOrigin = 'anonymous'
   im.onload = () => {
     hitCanvas.width = im.naturalWidth
     hitCanvas.height = im.naturalHeight

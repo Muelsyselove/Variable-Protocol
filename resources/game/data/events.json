@@ -1,0 +1,65 @@
+{
+  "events": [
+    {
+      "id": "randomNumber", "name": "随机数", "desc": "一台老旧的随机数发生器仍在运转。投入通量，它会吐出一个 1~6 的数。",
+      "options": [
+        { "label": "投入30通量，掷一次随机数", "cost": 30, "script": "randomNumberRoll", "scriptParams": { "midFlux": 60, "highFlux": 80, "dicePool": ["gloomDie", "chaosDie", "ruinDie", "overloadDie", "verify", "purify", "shieldDie", "bastionDie", "regenDie", "sentryDie", "firstAidDie", "magicDie", "cometDie", "chainDie", "gatlingDie", "pierceDie", "leechDie", "cacheDie", "vanguardDie", "bountyDie", "shieldSurgeDie", "desperateDie", "manaVeilDie", "twinMindDie", "transposeDie"] } },
+        { "label": "离开", "outcomes": [], "text": "你无视了它的嗡鸣。" }
+      ]
+    },
+    {
+      "id": "dataDebris", "name": "数据残骸", "desc": "一段漂浮的数据残骸，似乎还有利用价值。",
+      "options": [
+        { "label": "回收残骸（获得50通量）", "outcomes": [{ "fx": "flux", "params": { "amount": 50 } }], "text": "回收完成，获得50通量。" },
+        { "label": "解析残骸（恢复25%生命值）", "outcomes": [{ "fx": "healPct", "params": { "pct": 0.25 } }], "text": "解析完成，恢复25%生命值。" },
+        { "label": "提取模块（随机普通转译器）", "outcomes": [{ "fx": "grantRandomTranslator", "params": { "prefix": "提取成功，获得" } }] }
+      ]
+    },
+    {
+      "id": "overclock", "name": "超频实验", "desc": "一次高风险的超频实验。献祭生命值上限，换取攻击力。",
+      "options": [
+        { "label": "献祭20%生命值上限，攻击力+15%（本局）", "outcomes": [{ "fx": "modMaxHp", "params": { "mult": 0.8 } }, { "fx": "modAtk", "params": { "bonus": 0.15 } }], "text": "实验完成。生命值上限-20%，攻击力+15%。" },
+        { "label": "拒绝", "outcomes": [], "text": "你退出了实验室。" }
+      ]
+    },
+    {
+      "id": "resonance", "name": "谐振仪式", "desc": "古老的谐振仪式：强化一枚已有的转译器。",
+      "options": [
+        { "label": "强化1个可叠加转译器（代价：随机移除1个其他普通转译器）", "script": "resonanceRitual" },
+        { "label": "离开", "outcomes": [], "text": "仪式需要一个你不愿付出的代价。" }
+      ]
+    },
+    {
+      "id": "entropyAbyss", "name": "熵蚀深渊", "desc": "深渊中回荡着低语：用鲜血交换通量。",
+      "options": [
+        { "label": "受到当前生命15%的真实伤害，换取120通量", "outcomes": [{ "fx": "hpCost", "params": { "pct": 0.15, "keepMin": 1, "flux": 120 } }] },
+        { "label": "拒绝", "outcomes": [], "text": "你转身离开了深渊。" }
+      ]
+    },
+    {
+      "id": "parallelSample", "name": "平行样本", "desc": "一份来自平行行动线的样本，可以标记下一场战斗。",
+      "options": [
+        { "label": "标记：下一场敌方生命值-30%，通量奖励减半", "outcomes": [{ "fx": "nextBattleMark", "params": { "enemyHpMult": 0.7, "fluxMult": 0.5 } }], "text": "样本已标记下一场战斗。" },
+        { "label": "不使用", "outcomes": [], "text": "样本被放回了容器。" }
+      ]
+    },
+    {
+      "id": "voidWhisper", "name": "虚空低语", "desc": "虚空中传来低语，向你提供一颗被诅咒的强袭骰。",
+      "options": [
+        { "label": "接受强袭骰（代价：下一场敌方攻击力+10%）", "outcomes": [{ "fx": "extraDie", "params": { "id": "assault" } }, { "fx": "nextBattleMark", "params": { "enemyAtkMult": 1.1 } }], "text": "强袭骰已加入骰池。下一场战斗敌方攻击力+10%。" },
+        { "label": "拒绝", "outcomes": [], "text": "低语消散了。" }
+      ]
+    },
+    {
+      "id": "redundantBackup", "name": "冗余备份", "desc": "一份冗余备份静静等待读取。",
+      "options": [
+        { "label": "读取备份", "outcomes": [{ "fx": "ifFullHp", "params": { "then": [{ "fx": "flux", "params": { "amount": 60 } }], "else": [{ "fx": "healPct", "params": { "pct": 0.3 } }] } }] }
+      ]
+    }
+  ],
+  "rewards": [
+    { "label": "随机普通转译器", "outcomes": [{ "fx": "grantRandomTranslator", "params": { "prefix": "获得" } }] },
+    { "label": "80通量", "outcomes": [{ "fx": "flux", "params": { "amount": 80 } }], "text": "获得80通量。" },
+    { "label": "恢复35%生命值", "outcomes": [{ "fx": "healPct", "params": { "pct": 0.35 } }], "text": "恢复35%生命值。" }
+  ]
+}

@@ -5,10 +5,15 @@ import { initRouter, show, currentScreen } from './router.js'
 import { initTooltip, ensureProtocolBar, setProtocolBarTerminate, updateProtocolBar } from './ui/components.js'
 import { ensureTitlebar } from './ui/titlebar.js'
 import { ensurePetOverlay, updatePetOverlay } from './ui/petOverlay.js'
-import { G, initProfile, saveRun, decayPetSatiety } from './state.js'
+import { G, initProfile, saveRun, decayPetSatiety, setPetKnownIdsProvider } from './state.js'
+import { PET_DEFS } from './data/pets.js'
+import { loadGameData } from './core/gameData.js'
 import { resumeSfx, playSfx, setSfxEnabled, setSfxVolume } from './core/sfx.js'
 import { petModeActive, pushPetState, handlePetAction } from './core/petBridge.js'
-import { setLastCheck } from './core/updater.js'
+import { runBootSplash } from './ui/bootSplash.js'
+
+// 桌宠 id 集合注入（存档清洗用）：读档时点读取定义表，退役 id 判定始终基于当前资源
+setPetKnownIdsProvider(() => new Set(PET_DEFS.map((d) => d.id)))
 
 import { register as regMenu } from './ui/screens/menu.js'
 import { register as regSelect } from './ui/screens/select.js'
@@ -82,12 +87,15 @@ setProtocolBarTerminate(async () => {
   // 桌宠悬浮窗动作（喂食/购买/换协议/换桌宠/互动/退出）
   if (typeof window !== 'undefined' && window.api) {
     window.api.onPetAction((a) => handlePetAction(a))
-    // 打包版启动静默检查发现新版本：记录结果（菜单设置入口显示红点）
-    window.api.onUpdateFound?.((info) => setLastCheck(info))
   }
 
   async function boot() {
-    await initProfile()
+    // 开屏界面（主窗口内覆盖层）：并行执行资源+存档加载与更新检查（自动下载新版本），
+    // 就绪后移除覆盖层进入主菜单；资源加载失败停留在开屏错误提示
+    await runBootSplash(async () => {
+      await loadGameData()
+      await initProfile()
+    })
     show('menu')
   }
 

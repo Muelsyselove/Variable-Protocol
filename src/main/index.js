@@ -1,10 +1,16 @@
 // Electron 主进程：无边框窗口与本地存档
-import { app, BrowserWindow, ipcMain, screen, shell, net, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, shell, dialog } from 'electron'
 import { join, dirname, resolve, relative, isAbsolute } from 'node:path'
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { registerGameScheme, initResources } from './resources.js'
+import { registerUpdaterIpc, setProgressListener, setUpdateProvider } from './updater.js'
+import { registerBackendIpc, backendConfigured, checkCoreUpdate, setResourceApplyListener } from './backend.js'
 
 const __dirname = import.meta.dirname ?? fileURLToPath(new URL('.', import.meta.url))
+
+// game:// 特权协议注册必须先于 app ready（资源包加载通道）
+registerGameScheme()
 
 // ══════════ 数据目录重定向（须先于一切窗口/存档访问执行） ══════════
 // 自定义数据目录记录在默认 userData 下的指针文件（datapath.json）中，启动时最先读取并 setPath。
@@ -127,6 +133,12 @@ function createWindow() {
   if (iconPath) {
     try { win.setIcon(iconPath) } catch { /* 图标设置失败不影响运行 */ }
   }
+  // 开发模式：渲染层报错/警告转发到主进程 stdout，便于 npm run dev 排查
+  if (process.env.ELECTRON_RENDERER_URL) {
+    win.webContents.on('console-message', (_e, level, message) => {
+      if (level >= 2) console.log(`[renderer:${level >= 3 ? 'error' : 'warn'}] ${message}`)
+    })
+  }
   // 最大化状态变化（含 Aero Snap 拖拽贴边、标题栏双击等外部触发）：推送渲染层同步按钮图标
   const pushMaximized = (v) => {
     if (win && !win.isDestroyed()) win.webContents.send('window:maximized', v)
@@ -141,12 +153,18 @@ function savesDir() {
   return d
 }
 
+// 存档文件白名单：玩家数据仅允许这两个文件（profile=玩家档案 / run=进行中对局），
+// 防止任意路径写入；账号、服务器配置等其他数据各有独立存储（accountStore/backend）
+const SAVE_FILES = new Set(['profile.json', 'run.json'])
+
 ipcMain.handle('save:write', (_e, file, data) => {
+  if (!SAVE_FILES.has(file)) return false
   writeFileSync(join(savesDir(), file), JSON.stringify(data, null, 2), 'utf-8')
   return true
 })
 
 ipcMain.handle('save:read', (_e, file) => {
+  if (!SAVE_FILES.has(file)) return null
   try {
     let text = readFileSync(join(savesDir(), file), 'utf-8')
     // 剥离 UTF-8 BOM：外部工具（记事本/PowerShell5.1）写档可能带BOM，否则 JSON.parse 失败误判为无存档
@@ -158,6 +176,7 @@ ipcMain.handle('save:read', (_e, file) => {
 })
 
 ipcMain.handle('save:delete', (_e, file) => {
+  if (!SAVE_FILES.has(file)) return false
   try { rmSync(join(savesDir(), file)) } catch { /* 忽略不存在 */ }
   return true
 })
@@ -403,69 +422,33 @@ ipcMain.handle('ai:chat', async (_e, { endpoint, apiKey, model, messages, temper
   }
 })
 
-// ── 应用内更新检查（GitHub Releases） ──
-// 检查最新 release（GitHub releases/latest 自动排除 pre-release），与当前版本比较；
-// 不自动下载安装，仅在设置页展示更新信息并引导前往发布页手动下载。
+// ── 应用内更新（检查/下载/安装在 src/main/updater.js；开屏覆盖层在主窗口内，由渲染层驱动检查）──
 const GITHUB_REPO = 'Muelsyselove/Variable-Protocol'
-const GITHUB_LATEST_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
-
-// 版本号比较：按数值段逐位比较（v1.10.0 > v1.9.0），非数字段按 0 处理
-function compareVersions(a, b) {
-  const pa = String(a).split(/[.\-+]/)
-  const pb = String(b).split(/[.\-+]/)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const na = parseInt(pa[i], 10) || 0
-    const nb = parseInt(pb[i], 10) || 0
-    if (na !== nb) return na - nb
-  }
-  return 0
-}
-
-async function fetchLatestRelease() {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 15000)
-  try {
-    // net.fetch 走 Chromium 网络栈（系统证书库 + 系统代理）；Node 原生 fetch 不读系统证书，
-    // 在装有自定义根 CA（安全软件/代理拦截 TLS）的机器上会证书校验失败，表现为"检查失败"
-    const res = await net.fetch(GITHUB_LATEST_API, {
-      headers: { 'User-Agent': 'Variable-Protocol-Updater', Accept: 'application/vnd.github+json' },
-      signal: controller.signal
-    })
-    if (res.status === 404) return { ok: true, current: app.getVersion(), latest: null, updateAvailable: false }
-    if (!res.ok) return { ok: false, error: `HTTP ${res.status}（GitHub API）` }
-    const data = await res.json()
-    const latest = {
-      version: String(data.tag_name || '').replace(/^v/, ''),
-      name: data.name || '',
-      url: data.html_url || `https://github.com/${GITHUB_REPO}/releases/latest`,
-      notes: String(data.body || '').slice(0, 6000),
-      publishedAt: data.published_at || ''
-    }
-    return {
-      ok: true,
-      current: app.getVersion(),
-      latest,
-      updateAvailable: compareVersions(latest.version, app.getVersion()) > 0
-    }
-  } catch (err) {
-    return { ok: false, error: err?.name === 'AbortError' ? '检查超时（15秒），网络不稳定' : String(err?.message || err) }
-  } finally {
-    clearTimeout(timer)
-  }
-}
 
 ipcMain.handle('app:version', () => app.getVersion())
-
-ipcMain.handle('update:check', () => fetchLatestRelease())
 
 ipcMain.handle('update:openRelease', async () => {
   await shell.openExternal(`https://github.com/${GITHUB_REPO}/releases/latest`)
   return true
 })
 
-// 启动静默检查：仅打包版，延迟 30 秒避开启动高峰；发现新版本时推送渲染层（菜单设置入口红点）
-app.whenReady().then(() => {
+// ══════════ 启动编排：主窗口（内含开屏覆盖层） ══════════
+app.whenReady().then(async () => {
+  // 资源服务初始化：解析活动资源根（基线/覆盖层）并注册 game:// 协议处理器，须先于窗口创建
+  initResources()
+  registerUpdaterIpc()
+  registerBackendIpc()
+  // 更新检查提供者：服务器优先（已配置时），GitHub Releases 兜底
+  if (backendConfigured()) setUpdateProvider(() => checkCoreUpdate())
+  // 下载进度 / 资源应用进度推送主窗口（开屏覆盖层在主窗口内）
+  const sendWin = (channel, data) => {
+    if (win && !win.isDestroyed()) win.webContents.send(channel, data)
+  }
+  setProgressListener((p) => sendWin('update:downloadProgress', p))
+  setResourceApplyListener((p) => sendWin('resource:applyProgress', p))
+
   createWindow()
+
   // 自定义数据目录失效（换盘/被删）：已回退默认位置，弹窗告知避免"存档消失"困惑
   if (dataDirFallbackNotice) {
     dialog.showMessageBox(win, {
@@ -475,14 +458,7 @@ app.whenReady().then(() => {
       buttons: ['知道了']
     })
   }
-  if (app.isPackaged) {
-    setTimeout(async () => {
-      const res = await fetchLatestRelease()
-      if (res?.ok && res.updateAvailable && win && !win.isDestroyed()) {
-        win.webContents.send('update:found', res)
-      }
-    }, 30000)
-  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

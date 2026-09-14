@@ -1,0 +1,6 @@
+[
+  { "id": "standard", "name": "标准协议骰组", "atk": 2200, "dice": { "attack": 4, "barrier": 2, "heal": 2 }, "special": [], "desc": "攻击力+2200。初始骰子：攻击×4、屏障×2、治疗×2。稳定可靠。" },
+  { "id": "heavy", "name": "重核骰组", "atk": 2800, "dice": { "attack": 6, "barrier": 2 }, "special": [], "desc": "攻击力+2800。初始骰子：攻击×6、屏障×2。物理伤害+15%，无法获得治疗骰子。", "setupFx": [{ "fx": "flag", "params": { "name": "noHealDice" } }, { "fx": "dealMult", "params": { "value": 1.15, "label": "重核", "when": { "dmgType": "PHYSICAL" } } }] },
+  { "id": "interferometer", "name": "干涉仪骰组", "atk": 2000, "dice": { "attack": 3, "barrier": 3, "heal": 1 }, "special": ["interference"], "desc": "攻击力+2000。初始骰子：攻击×3、屏障×3、治疗×1、干涉骰×1。" },
+  { "id": "ripple", "name": "涟漪骰组", "atk": 1900, "dice": { "attack": 3, "barrier": 2, "heal": 3 }, "special": [], "desc": "攻击力+1900。初始骰子：攻击×3、屏障×2、治疗×3。治疗骰子的溢出治疗量转化为屏障。", "setupFx": [{ "fx": "flag", "params": { "name": "healOverflowBarrier" } }] }
+]

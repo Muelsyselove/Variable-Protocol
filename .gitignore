@@ -16,3 +16,9 @@ scripts/.ui-test/
 # 本地工作目录
 bug反馈/
 美术参考/
+
+# 个人后台服务器配置（真实地址/密钥绝不入库；模板见 server.example.json）
+server.json
+
+# 服务器运行数据（用户账号/云端存档/已发布资源包，绝不入库）
+server/data/

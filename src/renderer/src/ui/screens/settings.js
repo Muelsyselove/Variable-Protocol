@@ -105,11 +105,44 @@ function renderSettings(root, params) {
         <div class="set-status dim" id="data-dir-status"></div>
       </div>
       <div class="settings-col panel">
+        <div class="set-title">// 账号与云同步</div>
+        <div class="set-note dim">登录个人后台服务器后可将玩家档案上传/恢复到云端（含算力币、桌宠、方案池等局外数据；进行中的对局不上传）。账号凭据仅保存在本机。未配置服务器时此功能停用。</div>
+        <div class="cloud-state dim" id="cloud-state">读取中…</div>
+        <div class="cloud-login" id="cloud-login" style="display:none">
+          <label class="set-row"><span class="k">用户名</span>
+            <input type="text" id="cloud-user" placeholder="用户名"/>
+          </label>
+          <label class="set-row"><span class="k">密码</span>
+            <input type="password" id="cloud-pass" placeholder="密码"/>
+          </label>
+        </div>
+        <div class="set-actions">
+          <button class="btn btn-mini" id="btn-cloud-login">登录</button>
+          <button class="btn btn-mini" id="btn-cloud-register">注册</button>
+          <button class="btn btn-mini" id="btn-cloud-logout" style="display:none">登出</button>
+          <button class="btn btn-mini" id="btn-cloud-push" style="display:none">上传存档</button>
+          <button class="btn btn-mini" id="btn-cloud-pull" style="display:none">恢复云端存档</button>
+        </div>
+        <div class="set-status dim" id="cloud-status"></div>
+      </div>
+      <div class="settings-col panel">
+        <div class="set-title">// 资源版本</div>
+        <div class="set-note dim">游戏资源（转译器/骰子/敌人/干员/武器/事件/桌宠定义与全部图片）已与游戏核心分离存放，可独立更新。修复会清除已下载的资源更新并回退到随安装包发布的版本（不影响存档）。</div>
+        <div class="set-row"><span class="k">资源版本</span>
+          <span id="res-version" class="dim">读取中…</span>
+        </div>
+        <div class="set-actions">
+          <button class="btn btn-mini" id="btn-res-update" ${''}>检查资源更新</button>
+          <button class="btn btn-mini btn-warn" id="btn-res-repair">修复资源</button>
+        </div>
+        <div class="set-status dim" id="res-status"></div>
+      </div>
+      <div class="settings-col panel">
         <div class="set-title">// 版本与更新</div>
         <div class="set-row"><span class="k">当前版本</span>
           <span id="upd-current" class="dim">读取中…</span>
         </div>
-        <div class="set-note dim">打包版启动后会静默检查 GitHub 最新发布版；也可在此手动检查。发现新版本时可前往发布页手动下载安装包。</div>
+        <div class="set-note dim">启动时开屏界面会自动检查更新（服务器优先，GitHub Releases 兜底）并在发现新版本时自动下载安装包；也可在此手动检查。安装包下载完成后可在开屏界面一键安装。</div>
         <div class="set-actions">
           <button class="btn btn-mini" id="btn-upd-check">检查更新</button>
           <button class="btn btn-mini" id="btn-upd-open" style="display:none">前往下载</button>
@@ -177,6 +210,117 @@ function renderSettings(root, params) {
     renderUpdateResult(res)
   }
   btnUpdOpen.onclick = () => window.api.openReleasePage()
+
+  // ── 账号与云同步 ──
+  const cloudStateEl = cont.querySelector('#cloud-state')
+  const cloudLoginBox = cont.querySelector('#cloud-login')
+  const btnCloudLogin = cont.querySelector('#btn-cloud-login')
+  const btnCloudRegister = cont.querySelector('#btn-cloud-register')
+  const btnCloudLogout = cont.querySelector('#btn-cloud-logout')
+  const btnCloudPush = cont.querySelector('#btn-cloud-push')
+  const btnCloudPull = cont.querySelector('#btn-cloud-pull')
+  function renderCloudState(st) {
+    if (!st?.configured) {
+      cloudStateEl.textContent = '未配置服务器（%APPDATA%\\variable-protocol\\server.json）'
+      btnCloudLogin.disabled = true
+      btnCloudRegister.disabled = true
+      return
+    }
+    btnCloudLogin.disabled = false
+    btnCloudRegister.disabled = false
+    if (st.loggedIn) {
+      cloudStateEl.textContent = `已登录：${st.username}（${st.baseUrl || '服务器'}）`
+      cloudLoginBox.style.display = 'none'
+      btnCloudLogin.style.display = 'none'
+      btnCloudRegister.style.display = 'none'
+      btnCloudLogout.style.display = ''
+      btnCloudPush.style.display = ''
+      btnCloudPull.style.display = ''
+    } else {
+      cloudStateEl.textContent = `未登录（服务器：${st.baseUrl || '已配置'}）`
+      cloudLoginBox.style.display = ''
+      btnCloudLogin.style.display = ''
+      btnCloudRegister.style.display = ''
+      btnCloudLogout.style.display = 'none'
+      btnCloudPush.style.display = 'none'
+      btnCloudPull.style.display = 'none'
+    }
+  }
+  window.api?.serverStatus?.().then(renderCloudState)
+  const readCloudForm = () => ({
+    username: cont.querySelector('#cloud-user').value.trim(),
+    password: cont.querySelector('#cloud-pass').value
+  })
+  btnCloudLogin.onclick = async () => {
+    const { username, password } = readCloudForm()
+    if (!username || !password) { status('#cloud-status', '请输入用户名与密码', 'err'); return }
+    status('#cloud-status', '登录中…')
+    const r = await window.api.serverLogin({ username, password })
+    if (!r.ok) { status('#cloud-status', `登录失败：${r.error}`, 'err'); return }
+    status('#cloud-status', '登录成功 ✓', 'ok')
+    playSfx('toggle')
+    renderCloudState(await window.api.serverStatus())
+  }
+  btnCloudRegister.onclick = async () => {
+    const { username, password } = readCloudForm()
+    if (!username || !password) { status('#cloud-status', '请输入用户名与密码', 'err'); return }
+    status('#cloud-status', '注册中…')
+    const r = await window.api.serverRegister({ username, password })
+    if (!r.ok) { status('#cloud-status', `注册失败：${r.error}`, 'err'); return }
+    status('#cloud-status', '注册成功，已自动登录 ✓', 'ok')
+    playSfx('toggle')
+    renderCloudState(await window.api.serverStatus())
+  }
+  btnCloudLogout.onclick = async () => {
+    await window.api.serverLogout()
+    status('#cloud-status', '已登出 ✓', 'ok')
+    renderCloudState(await window.api.serverStatus())
+  }
+  btnCloudPush.onclick = async () => {
+    if (!confirm('将当前玩家档案上传到云端？云端旧数据将被覆盖。')) return
+    status('#cloud-status', '上传中…')
+    const r = await window.api.cloudPush()
+    status('#cloud-status', r.ok ? '上传完成 ✓' : `上传失败：${r.error}`, r.ok ? 'ok' : 'err')
+  }
+  btnCloudPull.onclick = async () => {
+    if (!confirm('用云端存档覆盖本地？本地当前档案会自动备份（saves/profile.backup-*.json）。恢复后需要重启游戏生效。')) return
+    status('#cloud-status', '恢复中…')
+    const r = await window.api.cloudPull()
+    if (!r.ok) { status('#cloud-status', `恢复失败：${r.error}`, 'err'); return }
+    status('#cloud-status', '恢复完成，建议重启游戏 ✓', 'ok')
+  }
+
+  // ── 资源版本 ──
+  const resVersionEl = cont.querySelector('#res-version')
+  function renderResInfo(info) {
+    if (!info?.ok) { resVersionEl.textContent = '资源不完整'; return }
+    const src = info.source === 'overlay' ? '服务器更新' : info.source === 'base' ? '安装基线' : info.source
+    resVersionEl.textContent = `v${info.version}（${src}）`
+  }
+  let currentResInfo = null
+  window.api?.resourceInfo?.().then((info) => { currentResInfo = info; renderResInfo(info) })
+  cont.querySelector('#btn-res-update').onclick = async () => {
+    status('#res-status', '正在检查资源更新…')
+    const r = await window.api.checkResourceUpdate(currentResInfo?.version || '0')
+    if (!r.ok) { status('#res-status', r.disabled ? '未配置服务器，资源更新暂不可用' : `检查失败：${r.error}`, 'err'); return }
+    if (!r.update) { status('#res-status', '资源已是最新 ✓', 'ok'); return }
+    const n = Object.keys(r.update.changed || {}).length
+    if (!confirm(`发现资源更新 v${r.update.version}（增量下载 ${n} 个文件），下载并应用？`)) return
+    status('#res-status', '下载资源中…')
+    const applied = await window.api.applyResourceUpdate(r.update)
+    if (!applied.ok) { status('#res-status', applied.error, 'err'); return }
+    status('#res-status', `资源已更新到 v${applied.version} ✓（本次下载 ${applied.files} 个文件，重启后完全生效）`, 'ok')
+    currentResInfo = await window.api.resourceInfo()
+    renderResInfo(currentResInfo)
+  }
+  cont.querySelector('#btn-res-repair').onclick = async () => {
+    if (!confirm('修复资源：清除已下载的资源更新并回退到安装基线版本？不影响存档。')) return
+    status('#res-status', '修复中…')
+    const info = await window.api.resourceRepair()
+    currentResInfo = info
+    renderResInfo(info)
+    status('#res-status', info.ok ? '已回退到安装基线 ✓（重启后完全生效）' : '修复失败：资源目录不可用', info.ok ? 'ok' : 'err')
+  }
 
   // ── 数据目录 ──
   const dataDirPath = cont.querySelector('#data-dir-path')

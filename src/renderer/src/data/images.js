@@ -1,28 +1,22 @@
-// 贴图接口：按 文件名（=内容id）自动收集各分类文件夹下的图片
-// 文件夹结构（1024×1024 原图，界面按需缩放）：
-//   assets/characters/<干员id>.png      角色立绘
-//   assets/weapons/<武器id>.png         武器贴图
-//   assets/translators/<转译器id>.png   转译器贴图
-// 文件名即 id（不含扩展名，支持png/jpg/jpeg/webp）；放入文件后无需改代码，自动生效
+// 贴图接口：三类「文件名=id」目录的图片映射（数据来自资源包 images/ 目录，主进程扫描）
+// 映射值形如 game://images/<分类>/<文件名>，由 core/gameData.js 加载时填充（fillImageMap）
+// 目录结构（1024×1024 原图，界面按需缩放）：
+//   images/characters/<干员id>.png      角色立绘
+//   images/weapons/<武器id>.png         武器贴图
+//   images/translators/<转译器id>.png   转译器贴图
+// 桌宠图片路径由 pets.json 显式声明，不在此映射
 // 调用：characterImg('baseline') / weaponImg('heavy') / translatorImg('assertModule')
 
-// 注意：import.meta.glob 需要字面量模式串，故逐类收集
-const CHARACTER_MODS = import.meta.glob('../assets/characters/*.{png,jpg,jpeg,webp}', { eager: true, import: 'default' })
-const WEAPON_MODS = import.meta.glob('../assets/weapons/*.{png,jpg,jpeg,webp}', { eager: true, import: 'default' })
-const TRANSLATOR_MODS = import.meta.glob('../assets/translators/*.{png,jpg,jpeg,webp}', { eager: true, import: 'default' })
+let CHARACTER_IMGS = {}
+let WEAPON_IMGS = {}
+let TRANSLATOR_IMGS = {}
 
-function toMap(mods) {
-  const map = {}
-  for (const [path, url] of Object.entries(mods)) {
-    const base = path.split('/').pop().replace(/\.(png|jpe?g|webp)$/i, '')
-    map[base] = url
-  }
-  return map
+export function fillImageMap(map) {
+  const m = map || {}
+  CHARACTER_IMGS = m.characters || {}
+  WEAPON_IMGS = m.weapons || {}
+  TRANSLATOR_IMGS = m.translators || {}
 }
-
-const CHARACTER_IMGS = toMap(CHARACTER_MODS)
-const WEAPON_IMGS = toMap(WEAPON_MODS)
-const TRANSLATOR_IMGS = toMap(TRANSLATOR_MODS)
 
 export function characterImg(id) {
   return CHARACTER_IMGS[id] || null
