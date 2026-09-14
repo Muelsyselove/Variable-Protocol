@@ -1,8 +1,8 @@
 {
   "format": 1,
-  "version": "2.0.0",
+  "version": "2.2.0",
   "minCore": "2.0.0",
-  "generatedAt": "2026-09-14T09:34:43.670Z",
+  "generatedAt": "2026-09-14T16:39:44.736Z",
   "files": {
     "data/dice.json": "6fe28d3a7d9d4f0a0b430f327d278538162e55b16218b5b8093b49642b845f90",
     "data/enemies.json": "50c86ba2b5f0f7c2f5ba9b00ce3a93cd367033db7dd86bfdb1617543660ed701",
@@ -15,6 +15,7 @@
     "images/characters/offset.png": "04c434853b4817fe8322e332dcace91e8798b2130b96dc8f3fe41b359b13ea52",
     "images/characters/overflow.png": "518f186e88c74fc25225dc7c7e3fa25d2a2fcf047c909644801b0d6d2516aa5e",
     "images/characters/parity.png": "051255e85b19d12ad00a9c2e2e59f086a5f95831d5da6a3d85a9d550b00952b5",
+    "images/logo.png": "37377fccebc154b129912dfbd61262333589e4c3d66d98736deb62d260edfdc1",
     "images/pets/jingxi/Jingxi-chibi-cry.png": "4fa7dfe058be345726a5cfc032d7507365550c6eb866962650884096980d0018",
     "images/pets/jingxi/Jingxi-chibi-dispirited.png": "9576377806bce91ef3a569964726f27c9b23d0b47be8e4f987f1afca833ded39",
     "images/pets/jingxi/Jingxi-chibi-dizziness.png": "7fee70d32bdb890061b7d8a1da6e8499b073e0591045573f73f74de5a9304a89",

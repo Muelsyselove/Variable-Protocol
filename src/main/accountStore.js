@@ -9,7 +9,7 @@ function accountFile() {
   return join(app.getPath('userData'), 'account.json')
 }
 
-// 读取登录态：{ username, token, savedAt }，无/损坏返回 null
+// 读取登录态：{ username, account, token, savedAt }，无/损坏返回 null
 export function readAccount() {
   try {
     let text = readFileSync(accountFile(), 'utf-8')

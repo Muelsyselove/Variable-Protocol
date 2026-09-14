@@ -1,6 +1,6 @@
 {
   "name": "variable-protocol",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "description": "变量协议：回合制骰子肉鸽",
   "main": "out/main/index.js",
   "type": "module",

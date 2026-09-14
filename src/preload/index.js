@@ -40,13 +40,20 @@ contextBridge.exposeInMainWorld('api', {
   resourceInfo: () => ipcRenderer.invoke('res:info'),
   resourceImageMap: () => ipcRenderer.invoke('res:imageMap'),
   resourceRepair: () => ipcRenderer.invoke('res:repair'),
-  // 个人后台服务器（占位：未配置服务器时全部禁用）
+  // 个人后台服务器（账号/公告/云同步；未配置服务器时账号相关功能禁用）
   serverStatus: () => ipcRenderer.invoke('server:status'),
   serverLogin: (payload) => ipcRenderer.invoke('server:login', payload),
   serverRegister: (payload) => ipcRenderer.invoke('server:register', payload),
   serverLogout: () => ipcRenderer.invoke('server:logout'),
+  serverMe: () => ipcRenderer.invoke('server:me'),
+  serverChangePassword: (payload) => ipcRenderer.invoke('server:changePassword', payload),
+  serverDeleteAccount: (payload) => ipcRenderer.invoke('server:deleteAccount', payload),
+  serverAnnouncements: () => ipcRenderer.invoke('server:announcements'),
+  serverMails: () => ipcRenderer.invoke('server:mails'),
+  serverMailClaim: (id) => ipcRenderer.invoke('server:mailClaim', id),
   cloudPush: () => ipcRenderer.invoke('cloud:push'),
   cloudPull: () => ipcRenderer.invoke('cloud:pull'),
+  cloudPullIfNewer: () => ipcRenderer.invoke('cloud:pullIfNewer'),
   checkResourceUpdate: (current) => ipcRenderer.invoke('server:checkResourceUpdate', current),
   applyResourceUpdate: (update) => ipcRenderer.invoke('server:applyResourceUpdate', update)
 })

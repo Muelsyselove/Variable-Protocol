@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync } fr
 import { fileURLToPath } from 'node:url'
 import { registerGameScheme, initResources } from './resources.js'
 import { registerUpdaterIpc, setProgressListener, setUpdateProvider } from './updater.js'
-import { registerBackendIpc, backendConfigured, checkCoreUpdate, setResourceApplyListener } from './backend.js'
+import { registerBackendIpc, backendConfigured, checkCoreUpdate, setResourceApplyListener, pushPlayerData, accountState } from './backend.js'
 
 const __dirname = import.meta.dirname ?? fileURLToPath(new URL('.', import.meta.url))
 
@@ -466,4 +466,17 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// ── 退出自动云同步：已登录且服务器可用时，退出前把本地玩家档案上传云端（v2.1.0）──
+// 只尝试一次且限时 8 秒（无论成败不阻碍退出）；离线/未登录直接退出。
+let quitSyncDone = false
+app.on('before-quit', (e) => {
+  if (quitSyncDone) return
+  quitSyncDone = true
+  const acc = accountState()
+  if (!acc.configured || !acc.loggedIn) return
+  e.preventDefault()
+  const guard = new Promise((resolve) => setTimeout(resolve, 8000))
+  Promise.race([pushPlayerData(), guard]).catch(() => {}).finally(() => app.quit())
 })

@@ -321,6 +321,121 @@ body::after {
 .pb-stop { border-color: rgba(227, 93, 93, 0.6); color: #ff9c9c; }
 .pb-stop:hover:not(:disabled) { background: rgba(227, 93, 93, 0.15); border-color: var(--red); color: var(--red); }
 
+/* ---- 通用弹窗（终端风：遮罩 + 角括号面板） ---- */
+/* 遮罩从标题栏下方开始（top:34px）：任何弹窗都不遮挡窗口控制按钮（最小化/最大化/关闭） */
+.dlg-overlay {
+  position: fixed;
+  top: 34px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 7, 11, 0.72);
+  animation: dlgIn 0.18s ease;
+}
+@keyframes dlgIn { from { opacity: 0; } }
+.dlg { padding: 20px 24px; box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6); }
+.dlg-title {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--green);
+  margin-bottom: 14px;
+}
+.dlg-body { font-size: 13px; line-height: 1.7; color: var(--ink); }
+.dlg-body .dlg-msg { line-height: 1.9; }
+.dlg-body .dlg-msg b { color: var(--amber); }
+.dlg-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* 公告列表（弹窗内容；v2.2.0 起按分类 tab 展示） */
+.ann-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.ann-tab {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ann-tab:hover { color: var(--ink); border-color: var(--line-hi); }
+.ann-tab.active {
+  color: var(--green);
+  border-color: var(--green);
+  background: rgba(62, 224, 143, 0.08);
+}
+.ann-list { max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.ann-empty { text-align: center; padding: 20px 0; }
+.ann-item { border-left: 3px solid var(--green); padding: 2px 0 2px 12px; }
+.ann-item-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.ann-item-title {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: var(--ink);
+}
+.ann-item-date { font-family: var(--mono); font-size: 11px; }
+.ann-item-content {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ink-dim);
+  white-space: pre-wrap;
+}
+
+/* 邮件（v2.2.0：公告旁邮件入口；列表 + 详情 + 附件领取） */
+.mail-list { max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.mail-item {
+  border-left: 3px solid var(--cyan);
+  padding: 2px 0 2px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.mail-item:hover { background: rgba(86, 200, 232, 0.06); }
+.mail-item.claimed { border-left-color: var(--line-hi); cursor: default; }
+.mail-item.claimed:hover { background: transparent; }
+.mail-item-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+.mail-item-title {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: var(--ink);
+}
+.mail-item-meta { font-size: 11px; line-height: 1.6; }
+.mail-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 1px 6px;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  white-space: nowrap;
+}
+.mail-tag.ok { border-color: var(--ink-dim); color: var(--ink-dim); }
+.mail-detail-meta { font-size: 12px; margin-bottom: 10px; }
+.mail-detail-body {
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--ink);
+  white-space: pre-wrap;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+.mail-attachs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.mail-attach {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  background: rgba(240, 179, 74, 0.08);
+}
+.mail-attach.got { border-color: var(--line-hi); color: var(--ink-dim); background: transparent; text-decoration: line-through; }
+
 /* ---- 滚动条 ---- */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

@@ -16,6 +16,7 @@ import { runBootSplash } from './ui/bootSplash.js'
 setPetKnownIdsProvider(() => new Set(PET_DEFS.map((d) => d.id)))
 
 import { register as regMenu } from './ui/screens/menu.js'
+import { register as regLogin } from './ui/screens/login.js'
 import { register as regSelect } from './ui/screens/select.js'
 import { register as regMap } from './ui/screens/map.js'
 import { register as regCombat } from './ui/screens/combat.js'
@@ -33,6 +34,7 @@ if (new URLSearchParams(location.search).get('pet') === '1') {
   bootPet()
 } else {
   regMenu()
+  regLogin()
   regSelect()
   regMap()
   regCombat()
@@ -90,13 +92,15 @@ setProtocolBarTerminate(async () => {
   }
 
   async function boot() {
-    // 开屏界面（主窗口内覆盖层）：并行执行资源+存档加载与更新检查（自动下载新版本），
-    // 就绪后移除覆盖层进入主菜单；资源加载失败停留在开屏错误提示
+    // 开屏界面（主窗口内覆盖层）：并行执行资源+存档加载与更新检查（自动下载新版本）；
+    // 就绪后无缝交接——渲染登录界面，开屏 Logo 平滑飞行至登录页目标位，随后移除覆盖层
     await runBootSplash(async () => {
       await loadGameData()
       await initProfile()
+    }, () => {
+      show('login')
+      return document.querySelector('.login-logo')
     })
-    show('menu')
   }
 
   boot()

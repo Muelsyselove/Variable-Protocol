@@ -1,4 +1,5 @@
-// 个人后台服务器客户端：玩家账号、玩家数据云存档、资源版本增量更新、游戏核心更新
+// 个人后台服务器客户端：玩家账号（注册/登录/改密/注销）、公告、玩家数据云存档、
+// 资源版本增量更新、游戏核心更新。服务器地址绝不透出渲染层（任何界面不展示服务器地址）。
 // 配置文件位于 <默认userData>/server.json（仓库外，绝不提交 GitHub）：
 //   { "baseUrl": "https://your-server.example", "apiKey": "" }
 // 未配置/不可达时所有功能优雅禁用（核心更新检查回落 GitHub Releases）
@@ -10,7 +11,7 @@
 //   客户端版本未知（清单缺失）时服务端返回全量 changed——两种情况客户端处理路径一致
 import { app, net, ipcMain } from 'electron'
 import { join, dirname } from 'node:path'
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, renameSync, cpSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, renameSync, cpSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { compareVersions, overlayResourceRoot, baseResourceRoot } from './resources.js'
 import { readAccount, writeAccount, clearAccount } from './accountStore.js'
@@ -73,31 +74,53 @@ async function api(path, { method = 'GET', body, auth = false, timeout = 15000 }
 // 密码预哈希：登录/注册仅传输 SHA-256 十六进制摘要而非明文。
 // 背景：HTTP 直连 IP 场景下防链路嗅探——玩家复用的原始密码不泄露（主要风险）；
 // 服务端对收到的字符串照常 scrypt 存储，无需感知预哈希，未来升级 HTTPS 亦兼容。
-// 注意：哈希后服务端无法校验密码长度，密码策略（6~64 位）在客户端发送前执行。
+// 注意：哈希后服务端无法校验密码内容，密码策略在客户端发送前执行。
 function prehashPassword(password) {
   return createHash('sha256').update(String(password), 'utf-8').digest('hex')
 }
 
-function checkCredentials(username, password) {
-  if (!username || !password) return '用户名与密码不能为空'
-  if (String(password).length < 6 || String(password).length > 64) return '密码长度需为 6~64 位'
-  return null
+// 密码策略（v2.1.0）：≥8 位且同时包含字母与数字
+function validNewPassword(p) {
+  return typeof p === 'string' && p.length >= 8 && p.length <= 64 && /[A-Za-z]/.test(p) && /\d/.test(p)
 }
 
-export async function serverLogin(username, password) {
-  const err = checkCredentials(username, password)
-  if (err) return { ok: false, error: err }
-  const r = await api('/api/auth/login', { method: 'POST', body: { username, password: prehashPassword(password) } })
-  if (r.ok) writeAccount({ username, token: r.data.token })
+function saveSession(r) {
+  writeAccount({ username: r.data.username, account: r.data.account || '', token: r.data.token })
+}
+
+// 登录：凭据为 11 位账号（v2.2.0 起）；服务端兼容旧版用户名
+export async function serverLogin(account, password) {
+  if (!account || !password) return { ok: false, error: '账号与密码不能为空' }
+  const r = await api('/api/auth/login', { method: 'POST', body: { username: account, password: prehashPassword(password) } })
+  if (r.ok) saveSession(r)
   return r
 }
 
-// 注册并自动登录
+// 注册并自动登录：用户名纯英文字母 2~24 位；密码 ≥8 位且含字母与数字；服务端自动分配 11 位账号
 export async function serverRegister(username, password) {
-  const err = checkCredentials(username, password)
-  if (err) return { ok: false, error: err }
+  if (!/^[A-Za-z]{2,24}$/.test(username || '')) return { ok: false, error: '用户名需为 2~24 位英文字母' }
+  if (!validNewPassword(password)) return { ok: false, error: '密码需不低于 8 位，且同时包含字母和数字' }
   const r = await api('/api/auth/register', { method: 'POST', body: { username, password: prehashPassword(password) } })
-  if (r.ok) writeAccount({ username, token: r.data.token })
+  if (r.ok) saveSession(r)
+  return r
+}
+
+// 修改密码：验证原密码后更换；成功后旧令牌全部失效，本机自动保存新令牌
+export async function serverChangePassword(oldPassword, newPassword) {
+  if (!validNewPassword(newPassword)) return { ok: false, error: '新密码需不低于 8 位，且同时包含字母和数字' }
+  const r = await api('/api/auth/password', { method: 'PUT', auth: true, body: { oldPassword: prehashPassword(oldPassword), newPassword: prehashPassword(newPassword) } })
+  if (r.ok) {
+    const acc = readAccount()
+    if (acc) writeAccount({ ...acc, token: r.data.token })
+  }
+  return r
+}
+
+// 注销账号：永久删除账号与云端存档（需密码确认），成功后清除本机凭据
+export async function serverDeleteAccount(password) {
+  if (!password) return { ok: false, error: '请输入密码' }
+  const r = await api('/api/auth/account', { method: 'DELETE', auth: true, body: { password: prehashPassword(password) } })
+  if (r.ok) clearAccount()
   return r
 }
 
@@ -108,7 +131,37 @@ export function serverLogout() {
 
 export function accountState() {
   const acc = readAccount()
-  return { configured: backendConfigured(), loggedIn: !!acc, username: acc?.username || null }
+  return { configured: backendConfigured(), loggedIn: !!acc, username: acc?.username || null, account: acc?.account || null }
+}
+
+// 会话信息补全：旧版本登录时本机未存账号号（或令牌已换新），向服务器核对并回写
+export async function refreshAccountInfo() {
+  const r = await api('/api/auth/me', { auth: true })
+  if (r.ok) {
+    const acc = readAccount()
+    if (acc) writeAccount({ ...acc, username: r.data.username, account: r.data.account || '', token: acc.token })
+  }
+  return accountState()
+}
+
+// ── 公告（服务器 admin CLI 发布；失败/未配置返回空列表，不阻断游戏）──
+// 每条含 category 字段：system 系统通知 / game 游戏公告（v2.2.0 起分类展示）
+export async function fetchAnnouncements() {
+  const r = await api('/api/announcements', { timeout: 8000 })
+  if (!r.ok) return { ok: false, announcements: [] }
+  return { ok: true, announcements: Array.isArray(r.data.announcements) ? r.data.announcements : [] }
+}
+
+// ── 邮件（Bearer 鉴权；未登录/未配置返回空列表）──
+export async function fetchMails() {
+  const r = await api('/api/mail', { auth: true, timeout: 8000 })
+  if (!r.ok) return { ok: false, mails: [] }
+  return { ok: true, mails: Array.isArray(r.data.mails) ? r.data.mails : [] }
+}
+
+// 领取邮件附件：服务端标记已领取并回传附件清单（入账由渲染层执行并写存档）
+export async function claimMailAttachments(id) {
+  return api('/api/mail/claim', { method: 'POST', auth: true, body: { id: Number(id) || 0 } })
 }
 
 // ── 核心更新查询（供 updater.js 的服务器优先提供者；sha256 供下载完成后校验）──
@@ -255,14 +308,41 @@ export async function pullPlayerData() {
   return { ok: true }
 }
 
+// 智能拉取：仅当云端存档比本地新（savedAt 晚于本地 profile.json 修改时间）时恢复，
+// 避免离线游玩后的本地进度被旧云端数据覆盖。供登录后「开始游戏」自动同步。
+export async function pullPlayerDataIfNewer() {
+  const r = await api('/api/player/data', { auth: true, timeout: 8000 })
+  if (!r.ok) return r
+  if (!r.data?.profile) return { ok: true, pulled: false }
+  const local = join(app.getPath('userData'), 'saves', 'profile.json')
+  let localMtime = 0
+  try { localMtime = statSync(local).mtimeMs } catch { /* 本地无存档 */ }
+  const cloudAt = new Date(r.data.savedAt || 0).getTime() || 0
+  if (cloudAt <= localMtime) return { ok: true, pulled: false }
+  mkdirSync(dirname(local), { recursive: true })
+  if (existsSync(local)) {
+    writeFileSync(join(dirname(local), `profile.backup-${Date.now()}.json`), readFileSync(local), 'utf-8')
+  }
+  writeFileSync(local, JSON.stringify(r.data.profile, null, 2), 'utf-8')
+  return { ok: true, pulled: true }
+}
+
 // ── IPC 面 ──
+// 注意：状态不返回 baseUrl——任何界面都不展示服务器地址（v2.1.0）
 export function registerBackendIpc() {
-  ipcMain.handle('server:status', () => ({ ...accountState(), baseUrl: backendConfig().baseUrl || null }))
+  ipcMain.handle('server:status', () => accountState())
   ipcMain.handle('server:login', (_e, { username, password }) => serverLogin(username, password))
   ipcMain.handle('server:register', (_e, { username, password }) => serverRegister(username, password))
   ipcMain.handle('server:logout', () => serverLogout())
+  ipcMain.handle('server:me', () => refreshAccountInfo())
+  ipcMain.handle('server:changePassword', (_e, { oldPassword, newPassword }) => serverChangePassword(oldPassword, newPassword))
+  ipcMain.handle('server:deleteAccount', (_e, { password }) => serverDeleteAccount(password))
+  ipcMain.handle('server:announcements', () => fetchAnnouncements())
+  ipcMain.handle('server:mails', () => fetchMails())
+  ipcMain.handle('server:mailClaim', (_e, id) => claimMailAttachments(id))
   ipcMain.handle('cloud:push', () => pushPlayerData())
   ipcMain.handle('cloud:pull', () => pullPlayerData())
+  ipcMain.handle('cloud:pullIfNewer', () => pullPlayerDataIfNewer())
   ipcMain.handle('server:checkResourceUpdate', async (_e, currentVersion) => {
     const r = await checkResourceUpdate(currentVersion)
     return r

@@ -22,13 +22,12 @@
   pointer-events: none;
 }
 
-/* 标题区（左上） */
+/* 左上角入口区（v2.1.0：不再展示游戏名称，改为设置/公告按钮） */
 .menu-head {
   position: absolute;
   left: 48px;
   top: 62px;
   z-index: 3;
-  pointer-events: none;
   animation: menuHeadIn 0.7s ease;
 }
 @keyframes menuHeadIn { from { opacity: 0; transform: translateX(-22px); } }
@@ -39,27 +38,39 @@
   color: var(--ink-dim);
   margin-bottom: 16px;
 }
-.menu-title {
-  font-family: var(--mono);
-  font-size: 42px;
-  font-weight: 300;
-  letter-spacing: 8px;
-  color: var(--ink);
-  text-shadow: 0 0 40px rgba(62, 224, 143, 0.25);
-}
-.menu-x { color: var(--green); animation: blink 1.1s step-end infinite; }
-@keyframes blink { 50% { opacity: 0; } }
-.menu-sub {
-  font-size: 17px;
-  letter-spacing: 13px;
-  margin: 10px 0 6px;
-  color: var(--green);
-}
-.menu-tagline {
-  font-family: var(--mono);
-  font-size: 12px;
+.menu-corner { display: flex; gap: 10px; }
+.menu-corner-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: rgba(10, 16, 23, 0.84);
+  border: 1px solid var(--line);
   color: var(--ink-dim);
-  letter-spacing: 3px;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.menu-corner-btn svg { color: var(--green); }
+.menu-corner-btn:hover {
+  border-color: var(--green);
+  color: var(--ink);
+  background: var(--green-dim);
+  box-shadow: 0 0 16px rgba(62, 224, 143, 0.15);
+}
+.menu-corner-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 8px rgba(240, 179, 74, 0.8);
+  animation: upd-dot-pulse 1.6s ease-in-out infinite;
 }
 
 /* 立绘区（左侧，底部对齐，带反向视差） */
@@ -326,17 +337,6 @@
 }
 .menu-btn.mk-hero .menu-btn-arrow { font-size: 17px; }
 .menu-btn:hover:not(:disabled) .menu-btn-arrow { opacity: 1; }
-/* 更新红点：发现新版本时挂在"系统设置"按钮上 */
-.menu-btn-dot {
-  font-style: normal;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ff5c5c;
-  box-shadow: 0 0 6px rgba(255, 92, 92, 0.9);
-  transform: skewX(10deg);
-  animation: upd-dot-pulse 1.6s ease-in-out infinite;
-}
 @keyframes upd-dot-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
@@ -820,11 +820,157 @@ body.mini-mode .go-stat b { font-size: 22px; }
 body.mini-mode .go-title { font-size: 20px; }
 body.mini-mode .screen-gameover .go-quote { display: none; }
 
+/* ---- 登录界面（开屏后、主菜单前的账号门） ---- */
+.screen-login {
+  padding: 40px 60px;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+/* 登录界面：Logo 为开屏交接的飞行目标位（自身不做入场动画）；
+   登录组件在 Logo 飞行途中分层淡入，副标题随 Logo 到位后浮现 */
+.login-logo-wrap { text-align: center; }
+.login-logo {
+  width: min(520px, 52vw);
+  height: auto;
+  filter: drop-shadow(0 6px 30px rgba(0, 0, 0, 0.6));
+}
+.login-logo-sub {
+  font-size: 14px;
+  letter-spacing: 11px;
+  text-indent: 11px;
+  margin-top: 10px;
+  color: var(--green);
+  animation: loginFadeIn .5s ease .72s both;
+}
+.login-panel { width: 400px; padding: 24px 28px; animation: loginFadeUp .55s ease .3s both; }
+.login-offline { margin-top: 4px; animation: loginFadeUp .55s ease .42s both; }
+.login-foot {
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 1px;
+  animation: loginFadeIn .6s ease .55s both;
+}
+@keyframes loginFadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes loginFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.login-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+.login-tab {
+  flex: 1;
+  padding: 9px 0;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.login-tab:hover { border-color: var(--line-hi); color: var(--ink); }
+.login-tab.active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+.login-field { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.login-field span {
+  width: 64px;
+  flex-shrink: 0;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--ink-dim);
+}
+.login-field input {
+  flex: 1;
+  height: 34px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.login-field input:focus { border-color: var(--green); }
+.login-btn-submit { width: 100%; margin-top: 6px; }
+.login-status {
+  font-size: 12px;
+  line-height: 1.6;
+  min-height: 18px;
+  margin-top: 10px;
+  text-align: center;
+}
+.login-status.ok { color: var(--green); }
+.login-status.err { color: var(--red); }
+/* 已登录欢迎视图 */
+.login-welcome {
+  font-family: var(--mono);
+  font-size: 16px;
+  letter-spacing: 6px;
+  color: var(--ink);
+  text-align: center;
+}
+.login-acc-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-align: center;
+  margin: 18px 0 6px;
+}
+.login-acc {
+  font-family: var(--mono);
+  font-size: 22px;
+  letter-spacing: 5px;
+  color: var(--green);
+  text-align: center;
+  text-shadow: 0 0 18px rgba(62, 224, 143, 0.3);
+}
+.login-user { font-size: 12px; text-align: center; margin-top: 6px; }
+.login-btn-start { width: 100%; margin-top: 24px; }
+.login-btn-switch { display: block; margin: 14px auto 0; }
+/* 注册成功：账号完整展示 */
+.login-regdone { text-align: center; }
+.login-regdone-title {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 3px;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+.login-regdone-note { font-size: 12px; line-height: 1.8; color: var(--ink-dim); }
+.login-regdone-note b { color: var(--amber); }
+.login-regdone-acc {
+  font-family: var(--mono);
+  font-size: 24px;
+  letter-spacing: 4px;
+  color: var(--amber);
+  margin: 14px 0;
+  text-shadow: 0 0 18px rgba(240, 179, 74, 0.35);
+}
+
 /* ---- 设置界面 ---- */
 .screen-settings { padding: 40px 60px; gap: 18px; }
 .settings-head h2 { font-size: 22px; letter-spacing: 6px; margin-top: 6px; }
+.settings-tabs { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.set-tab {
+  padding: 8px 18px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.set-tab:hover { border-color: var(--line-hi); color: var(--ink); }
+.set-tab.active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
 .settings-body { flex: 1; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+.settings-pane { display: flex; flex-direction: column; gap: 16px; }
 .settings-col { padding: 20px 26px; }
+.acc-full { font-family: var(--mono); color: var(--green); letter-spacing: 1px; }
 .set-title {
   font-family: var(--mono);
   font-size: 14px;
@@ -918,7 +1064,7 @@ body.mini-mode .screen-gameover .go-quote { display: none; }
   font-size: 11px;
 }
 .agent-note { font-size: 12px; text-align: center; margin: 6px 0; }
-.settings-foot { display: flex; justify-content: flex-end; }
+.settings-foot { display: flex; justify-content: flex-end; gap: 12px; }
 
 /* ---- 小窗模式：极简中枢（无节点线，节点间自动流转） ---- */
 .mini-hub {

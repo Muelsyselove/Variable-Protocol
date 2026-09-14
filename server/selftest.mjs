@@ -89,39 +89,141 @@ const j = async (path, opts) => {
 // ── 账号与云存档 ──
 console.log('— 账号与云存档 —')
 {
-  const name = 'selftest_' + Date.now()
-  const bad = await j('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: name, password: '123' }) })
+  // 纯英文字母用户名（注册规则 v2.1.0：2~24 位字母）：时间戳数字映射为字母保证唯一
+  const toLetters = (n) => String(n).replace(/\d/g, (d) => 'abcdefghij'[d])
+  const name = 'selftest' + toLetters(Date.now())
+  const post = (path, body) => j(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const bad = await post('/api/auth/register', { username: name, password: '123' })
   assert(bad.status === 400, '注册拒绝过短密码')
+  const badName = await post('/api/auth/register', { username: '用户名' + Date.now(), password: 'pass123456' })
+  assert(badName.status === 400, '注册拒绝非纯英文用户名')
 
-  const reg = await j('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: name, password: 'pass123456' }) })
+  const reg = await post('/api/auth/register', { username: name, password: 'pass123456' })
   assert(reg.status === 200 && reg.data.token, '注册成功并返回令牌')
-  const dup = await j('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: name, password: 'pass123456' }) })
+  assert(/^\d{11}$/.test(reg.data.account || ''), '注册自动分配 11 位纯数字账号')
+  const dup = await post('/api/auth/register', { username: name, password: 'pass123456' })
   assert(dup.status === 409, '重复注册被拒绝')
 
-  const wrong = await j('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: name, password: 'wrong-pass' }) })
+  const wrong = await post('/api/auth/login', { username: reg.data.account, password: 'wrong-pass' })
   assert(wrong.status === 401, '错误密码登录被拒绝')
+  const noAcc = await post('/api/auth/login', { username: '9' + '0'.repeat(10), password: 'pass123456' })
+  assert(noAcc.status === 401, '不存在的账号登录被拒绝')
 
-  const login = await j('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: name, password: 'pass123456' }) })
-  assert(login.status === 200 && login.data.token, '正确密码登录成功')
+  const login = await post('/api/auth/login', { username: reg.data.account, password: 'pass123456' })
+  assert(login.status === 200 && login.data.token && login.data.account === reg.data.account, '账号登录成功')
+  const legacy = await post('/api/auth/login', { username: name, password: 'pass123456' })
+  assert(legacy.status === 200 && legacy.data.account === reg.data.account, '旧版用户名登录仍可用（返回同一账号）')
 
   const auth = { Authorization: `Bearer ${login.data.token}`, 'Content-Type': 'application/json' }
+  const me = await j('/api/auth/me', { headers: auth })
+  assert(me.status === 200 && me.data.account === reg.data.account, '会话信息接口返回账号')
+  const meNo = await j('/api/auth/me', {})
+  assert(meNo.status === 401, '无令牌访问会话信息被拒绝')
   const noauth = await j('/api/player/data', {})
   assert(noauth.status === 401, '无令牌访问云存档被拒绝')
 
+  // 修改密码：原密码错误被拒；成功后旧令牌失效、新令牌可用
+  const wrongOld = await j('/api/auth/password', { method: 'PUT', headers: auth, body: JSON.stringify({ oldPassword: 'bad-old', newPassword: 'newpass123' }) })
+  assert(wrongOld.status === 400, '修改密码拒绝错误原密码')
+  const chg = await j('/api/auth/password', { method: 'PUT', headers: auth, body: JSON.stringify({ oldPassword: 'pass123456', newPassword: 'newpass123' }) })
+  assert(chg.status === 200 && chg.data.token, '修改密码成功并返回新令牌')
+  const oldTok = await j('/api/player/data', { headers: auth })
+  assert(oldTok.status === 401, '修改密码后旧令牌失效')
+  const newAuth = { Authorization: `Bearer ${chg.data.token}`, 'Content-Type': 'application/json' }
+  const relogin = await post('/api/auth/login', { username: reg.data.account, password: 'newpass123' })
+  assert(relogin.status === 200, '新密码可登录')
+
   // 预哈希密码兼容性：客户端只发送 SHA-256 十六进制（64 字符），服务端须照常接受并校验
-  const hname = 'sth' + Date.now()
+  const hname = 'sth' + toLetters(Date.now())
   const fakeHash = createHash('sha256').update('player-real-password').digest('hex')
-  const regH = await j('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: hname, password: fakeHash }) })
+  const regH = await post('/api/auth/register', { username: hname, password: fakeHash })
   assert(regH.status === 200 && regH.data.token, '注册接受预哈希密码（64位十六进制）')
-  const loginH = await j('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: hname, password: fakeHash }) })
+  const loginH = await post('/api/auth/login', { username: regH.data.account, password: fakeHash })
   assert(loginH.status === 200 && loginH.data.token, '预哈希密码登录成功（同一哈希可登录）')
-  const wrongH = await j('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: hname, password: createHash('sha256').update('other-password').digest('hex') }) })
+  const wrongH = await post('/api/auth/login', { username: regH.data.account, password: createHash('sha256').update('other-password').digest('hex') })
   assert(wrongH.status === 401, '错误哈希登录被拒绝（非明文比对仍有效）')
 
-  const put = await j('/api/player/data', { method: 'PUT', headers: auth, body: JSON.stringify({ profile: { coins: 42, pet: { owned: { muelsyse: true } } }, clientVersion: '2.0.0' }) })
+  const put = await j('/api/player/data', { method: 'PUT', headers: newAuth, body: JSON.stringify({ profile: { coins: 42, pet: { owned: { muelsyse: true } } }, clientVersion: '2.0.0' }) })
   assert(put.status === 200, '上传云存档')
-  const get = await j('/api/player/data', { headers: auth })
+  const get = await j('/api/player/data', { headers: newAuth })
   assert(get.status === 200 && get.data.profile?.coins === 42 && get.data.profile?.pet?.owned?.muelsyse === true, '读取云存档数据一致')
+
+  // 注销账号：密码确认、数据清除、令牌失效
+  const delWrong = await j('/api/auth/account', { method: 'DELETE', headers: newAuth, body: JSON.stringify({ password: 'wrong-pass' }) })
+  assert(delWrong.status === 400, '注销账号拒绝错误密码')
+  const del = await j('/api/auth/account', { method: 'DELETE', headers: newAuth, body: JSON.stringify({ password: 'newpass123' }) })
+  assert(del.status === 200, '注销账号成功')
+  const goneTok = await j('/api/player/data', { headers: newAuth })
+  assert(goneTok.status === 401, '注销后令牌失效')
+  const goneLogin = await post('/api/auth/login', { username: reg.data.account, password: 'newpass123' })
+  assert(goneLogin.status === 401, '注销后账号无法登录')
+}
+
+// ── 公告 ──
+console.log('— 公告 —')
+{
+  const empty = await j('/api/announcements')
+  assert(empty.status === 200 && empty.data.ok && Array.isArray(empty.data.announcements), '公告接口可用')
+  admin('announce-add', '系统通知公告', '这是一条系统通知内容')
+  admin('announce-add', '游戏公告内容', '这是游戏公告内容', '--category', 'game')
+  const after = await j('/api/announcements')
+  const sys = after.data.announcements.find((a) => a.title === '系统通知公告')
+  const game = after.data.announcements.find((a) => a.title === '游戏公告内容')
+  assert(after.status === 200 && sys && sys.content && sys.category === 'system', '默认发布为系统通知分类')
+  assert(game && game.content && game.category === 'game', '--category game 发布为游戏公告分类')
+  admin('announce-del', String(sys.id))
+  admin('announce-del', String(game.id))
+  const removed = await j('/api/announcements')
+  assert(!removed.data.announcements.some((a) => a.id === sys.id || a.id === game.id), '删除公告后不再返回')
+}
+
+// ── 邮件 ──
+console.log('— 邮件 —')
+{
+  const toLetters = (n) => String(n).replace(/\d/g, (d) => 'abcdefghij'[d])
+  const name = 'mailer' + toLetters(Date.now())
+  const post = (path, body, headers = {}) => j(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) })
+  const reg = await post('/api/auth/register', { username: name, password: 'pass123456' })
+  assert(reg.status === 200, '注册邮件测试用户')
+  const auth = { Authorization: `Bearer ${reg.data.token}`, 'Content-Type': 'application/json' }
+
+  // 未登录访问被拒
+  const noauth = await j('/api/mail', {})
+  assert(noauth.status === 401, '无令牌访问邮件被拒绝')
+
+  // 定向邮件（带附件）
+  admin('mail-send', name, '定向补偿', '运营团队', '这是发给指定玩家的补偿邮件', '--attach', 'coins:500', '--attach', 'food:3')
+  const mine = await j('/api/mail', { headers: auth })
+  const direct = mine.data.mails.find((m) => m.title === '定向补偿')
+  assert(mine.status === 200 && direct, '定向邮件对收件人可见')
+  assert(direct.attachments.length === 2 && direct.attachments[0].type === 'coins' && direct.attachments[0].amount === 500, '附件清单正确（coins:500 + food:3）')
+  assert(direct.claimed === false, '初始未领取')
+
+  // 全服邮件
+  admin('mail-send', 'all', '全服福利', '运营团队', '这是全体玩家的福利邮件')
+  const allMail = (await j('/api/mail', { headers: auth })).data.mails.find((m) => m.title === '全服福利')
+  assert(allMail, '全服邮件对用户可见')
+
+  // 领取：成功 → 重复领取被拒
+  const claim = await post('/api/mail/claim', { id: direct.id }, auth)
+  assert(claim.status === 200 && claim.data.ok && claim.data.attachments.length === 2, '领取附件成功并回传清单')
+  const reclaim = await post('/api/mail/claim', { id: direct.id }, auth)
+  assert(reclaim.status === 409, '重复领取被拒绝（409）')
+  const after = await j('/api/mail', { headers: auth })
+  assert(after.data.mails.find((m) => m.id === direct.id).claimed === true, '领取后状态为已领取')
+
+  // 不存在的邮件
+  const ghost = await post('/api/mail/claim', { id: 999999 }, auth)
+  assert(ghost.status === 404, '领取不存在的邮件被拒绝')
+
+  // 删除
+  admin('mail-del', String(direct.id))
+  admin('mail-del', String(allMail.id))
+  const cleaned = await j('/api/mail', { headers: auth })
+  assert(!cleaned.data.mails.some((m) => m.id === direct.id || m.id === allMail.id), '删除邮件后不再返回')
+
+  // 清理测试用户
+  await j('/api/auth/account', { method: 'DELETE', headers: auth, body: JSON.stringify({ password: 'pass123456' }) })
 }
 
 // ── 资源增量 diff ──

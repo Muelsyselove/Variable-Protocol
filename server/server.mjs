@@ -10,13 +10,22 @@
 //   API_KEY   接入密钥（可选；设置后客户端 server.json 的 apiKey 必须一致）
 //
 // 接口（与客户端 src/main/backend.js / updater.js 约定）：
-//   POST /api/auth/register        注册 {username, password} → {token, username}
-//   POST /api/auth/login           登录 → {token, username}（限流：30 次/分钟/IP）
-//   GET  /api/core/latest?core=    最新核心版本（含下载地址与 sha256；未发布 → 404）
-//   GET  /api/resources/latest?core=&resource=  资源增量差异（见下）
-//   GET  /packages/resources/<版本>/<路径>       资源文件（支持 Range 断点续传）
-//   GET  /cores/<版本>/<文件>                     核心安装包（支持 Range）
+//   POST   /api/auth/register          注册 {username(纯英文), password} → {token, username, account(11位数字账号)}
+//   POST   /api/auth/login             登录 {username: 11位账号或旧版用户名, password} → {token, username, account}
+//   GET    /api/auth/me                当前会话信息 {username, account}（Bearer）
+//   PUT    /api/auth/password          修改密码 {oldPassword, newPassword}（Bearer）→ {token(旧令牌全部失效)}
+//   DELETE /api/auth/account           注销账号 {password}（Bearer）：永久删除用户与云端存档
+//   GET    /api/announcements          公告列表（分类：system 系统通知 / game 游戏公告；admin CLI 维护，逐请求读磁盘免重启）
+//   GET    /api/mail                   当前用户邮件列表（Bearer；含未领取附件状态）
+//   POST   /api/mail/claim             领取邮件附件 {id}（Bearer；服务端标记已领取，防重复领取）
+//   GET    /api/core/latest?core=      最新核心版本（含下载地址与 sha256；未发布 → 404）
+//   GET    /api/resources/latest?core=&resource=  资源增量差异（见下）
+//   GET    /packages/resources/<版本>/<路径>       资源文件（支持 Range 断点续传）
+//   GET    /cores/<版本>/<文件>                     核心安装包（支持 Range）
 //   GET/PUT /api/player/data       玩家云存档（Bearer 鉴权）
+//
+// 账号体系（v2.1.0 起）：注册仅填用户名（纯英文字母）与密码，服务端自动分配 11 位纯数字账号；
+// 登录使用账号（兼容旧版用户名登录）。
 //
 // 资源增量协议：服务端保存每个已发布版本的完整清单（路径→sha256）。
 // 客户端携带当前资源版本查询时，返回 {version, minCore, manifest(全量),
@@ -42,6 +51,8 @@ const GITHUB_RELEASES = 'https://github.com/Muelsyselove/Variable-Protocol/relea
 const USERS_FILE = join(DATA_DIR, 'users.json')
 const PLAYERS_FILE = join(DATA_DIR, 'players.json')
 const VERSIONS_FILE = join(DATA_DIR, 'versions.json')
+const ANNOUNCEMENTS_FILE = join(DATA_DIR, 'announcements.json')
+const MAILS_FILE = join(DATA_DIR, 'mails.json')
 const PACKAGES_DIR = join(DATA_DIR, 'packages', 'resources')
 const CORES_DIR = join(DATA_DIR, 'cores')
 for (const d of [DATA_DIR, PACKAGES_DIR, CORES_DIR]) mkdirSync(d, { recursive: true })
@@ -88,7 +99,7 @@ function json(res, code, data) {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Api-Key',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS'
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
   })
   res.end(body)
 }
@@ -135,9 +146,32 @@ function authUser(req) {
   }
   return null
 }
-function validUsername(name) {
-  return typeof name === 'string' && /^[A-Za-z0-9_\u4e00-\u9fa5]{2,24}$/.test(name)
+
+// ── 11 位纯数字账号（首位非 0，全服唯一）──
+function genAccountNumber() {
+  const existing = new Set(Object.values(users.users).map((u) => u.account).filter(Boolean))
+  for (;;) {
+    let n = String(1 + Math.floor(Math.random() * 9))
+    for (let i = 0; i < 10; i++) n += Math.floor(Math.random() * 10)
+    if (!existing.has(n)) return n
+  }
 }
+
+// 启动迁移：旧用户（无账号）补发；v2.1.0 前注册的用户可继续用用户名登录，
+// 也可让管理员经 admin user-list 查询账号后改用账号登录
+{
+  let changed = false
+  for (const u of Object.values(users.users)) {
+    if (!u.account) { u.account = genAccountNumber(); changed = true }
+  }
+  if (changed) saveJSON(USERS_FILE, users)
+}
+
+// 注册校验：用户名纯英文字母 2~24 位（v2.1.0 起）
+function validNewUsername(name) {
+  return typeof name === 'string' && /^[A-Za-z]{2,24}$/.test(name)
+}
+// 密码长度校验：注册/改密入口校验（客户端传输 SHA-256 预哈希时恒通过，内容策略由客户端执行）
 function validPassword(pass) {
   return typeof pass === 'string' && pass.length >= 6 && pass.length <= 64
 }
@@ -222,22 +256,134 @@ const server = createServer(async (req, res) => {
       if (rateLimited(ip)) return json(res, 429, { error: '请求过于频繁，请稍后再试' })
       const body = (await readBody(req, 4096)) || {}
       const { username, password } = body
-      if (!validUsername(username)) return json(res, 400, { error: '用户名需为 2~24 位字母/数字/下划线/中文' })
       if (!validPassword(password)) return json(res, 400, { error: '密码长度需为 6~64 位' })
-      const existing = users.users[username]
       if (path === '/api/auth/register') {
-        if (existing) return json(res, 409, { error: '用户名已被注册' })
+        if (!validNewUsername(username)) return json(res, 400, { error: '用户名需为 2~24 位纯英文字母' })
+        if (users.users[username]) return json(res, 409, { error: '用户名已被注册' })
         const salt = randomBytes(16).toString('hex')
-        const user = { salt, hash: hashPassword(password, salt), tokens: [], createdAt: Date.now() }
+        const user = { salt, hash: hashPassword(password, salt), tokens: [], createdAt: Date.now(), account: genAccountNumber() }
         users.users[username] = user
         saveJSON(USERS_FILE, users)
-        return json(res, 200, { ok: true, token: mintToken(user), username })
+        return json(res, 200, { ok: true, token: mintToken(user), username, account: user.account })
       }
-      if (!existing || !verifyPassword(password, existing.salt, existing.hash)) {
-        return json(res, 401, { error: '用户名或密码错误' })
+      // 登录：11 位数字按账号查，否则按用户名查（旧版兼容）
+      const key = String(username || '')
+      let name = null
+      if (/^\d{11}$/.test(key)) {
+        name = Object.keys(users.users).find((n) => users.users[n].account === key) || null
+      } else if (users.users[key]) {
+        name = key
+      }
+      const user = name ? users.users[name] : null
+      if (!user || !verifyPassword(password, user.salt, user.hash)) {
+        return json(res, 401, { error: '账号或密码错误' })
       }
       saveJSON(USERS_FILE, users)
-      return json(res, 200, { ok: true, token: mintToken(existing), username })
+      return json(res, 200, { ok: true, token: mintToken(user), username: name, account: user.account })
+    }
+
+    // ── 当前会话信息（Bearer）：补全/校验本机登录态（如旧版本登录时未存账号号）──
+    if (req.method === 'GET' && path === '/api/auth/me') {
+      const auth = authUser(req)
+      if (!auth) return json(res, 401, { error: '未登录或凭据无效' })
+      const user = users.users[auth.name]
+      return json(res, 200, { ok: true, username: auth.name, account: user?.account || null })
+    }
+
+    // ── 修改密码（Bearer + 原密码验证；成功后旧令牌全部失效，返回新令牌）──
+    if (req.method === 'PUT' && path === '/api/auth/password') {
+      if (rateLimited(ip)) return json(res, 429, { error: '请求过于频繁，请稍后再试' })
+      const auth = authUser(req)
+      if (!auth) return json(res, 401, { error: '未登录或凭据无效' })
+      const body = (await readBody(req, 4096)) || {}
+      const user = users.users[auth.name]
+      if (!user || !verifyPassword(body.oldPassword || '', user.salt, user.hash)) {
+        return json(res, 400, { error: '原密码错误' })
+      }
+      if (!validPassword(body.newPassword)) return json(res, 400, { error: '新密码长度需为 6~64 位' })
+      const salt = randomBytes(16).toString('hex')
+      user.salt = salt
+      user.hash = hashPassword(body.newPassword, salt)
+      user.tokens = []
+      saveJSON(USERS_FILE, users)
+      return json(res, 200, { ok: true, token: mintToken(user) })
+    }
+
+    // ── 注销账号（永久删除用户与云端存档，需密码确认）──
+    if (req.method === 'DELETE' && path === '/api/auth/account') {
+      if (rateLimited(ip)) return json(res, 429, { error: '请求过于频繁，请稍后再试' })
+      const auth = authUser(req)
+      if (!auth) return json(res, 401, { error: '未登录或凭据无效' })
+      const body = (await readBody(req, 4096)) || {}
+      const user = users.users[auth.name]
+      if (!user || !verifyPassword(body.password || '', user.salt, user.hash)) {
+        return json(res, 400, { error: '密码错误' })
+      }
+      delete users.users[auth.name]
+      delete players[auth.name]
+      saveJSON(USERS_FILE, users)
+      saveJSON(PLAYERS_FILE, players)
+      return json(res, 200, { ok: true })
+    }
+
+    // ── 公告（admin CLI 维护 announcements.json；逐请求读磁盘，发布后免重启）──
+    // 分类：system 系统通知（版本更新/调整细节）、game 游戏公告（新增内容/更新前瞻）。
+    // 旧数据无 category 字段按 system 处理（v2.2.0 前公告均为更新调整类）。旧客户端忽略
+    // category 字段照常展示，保持向后兼容。
+    if (req.method === 'GET' && path === '/api/announcements') {
+      const ann = loadJSON(ANNOUNCEMENTS_FILE, { list: [] })
+      const list = Array.isArray(ann.list) ? ann.list : []
+      const pick = (cat) => list
+        .filter((a) => (a.category === 'game' ? 'game' : 'system') === cat)
+        .sort((x, y) => (Number(y.id) || 0) - (Number(x.id) || 0))
+        .slice(0, 20)
+      return json(res, 200, { ok: true, announcements: [...pick('system'), ...pick('game')] })
+    }
+
+    // ── 邮件（admin CLI 维护 mails.json；Bearer 鉴权，按用户可见）──
+    // 存储：{ list: [{ id, to: 'all'|<用户名>, title, from, body, attachments, date, expiresAt, claimed: {用户名: 时间戳} }] }
+    // 附件：[{ type: 'coins'|'food'|'pet', amount?, id? }]，语义由客户端解释入账。
+    if (req.method === 'GET' && path === '/api/mail') {
+      const auth = authUser(req)
+      if (!auth) return json(res, 401, { error: '未登录或凭据无效' })
+      const store = loadJSON(MAILS_FILE, { list: [] })
+      const all = Array.isArray(store.list) ? store.list : []
+      const now = Date.now()
+      // 过期邮件全局清理（读取时顺带执行，免维护定时任务）
+      const alive = all.filter((m) => !m.expiresAt || m.expiresAt > now)
+      if (alive.length !== all.length) {
+        store.list = alive
+        saveJSON(MAILS_FILE, store)
+      }
+      const mails = alive
+        .filter((m) => m.to === 'all' || m.to === auth.name)
+        .sort((x, y) => (Number(y.id) || 0) - (Number(x.id) || 0))
+        .slice(0, 50)
+        .map((m) => ({
+          id: m.id, title: m.title, from: m.from || '', body: m.body || '',
+          attachments: Array.isArray(m.attachments) ? m.attachments : [],
+          date: m.date, expiresAt: m.expiresAt || null,
+          claimed: !!m.claimed?.[auth.name]
+        }))
+      return json(res, 200, { ok: true, mails })
+    }
+
+    // ── 领取邮件附件（服务端标记 claimed，多设备/重装不重复发放）──
+    if (req.method === 'POST' && path === '/api/mail/claim') {
+      const auth = authUser(req)
+      if (!auth) return json(res, 401, { error: '未登录或凭据无效' })
+      const body = (await readBody(req, 4096)) || {}
+      const store = loadJSON(MAILS_FILE, { list: [] })
+      const mail = (Array.isArray(store.list) ? store.list : [])
+        .find((m) => Number(m.id) === Number(body.id))
+      if (!mail) return json(res, 404, { error: '邮件不存在或已过期' })
+      if (mail.to !== 'all' && mail.to !== auth.name) return json(res, 404, { error: '邮件不存在或已过期' })
+      if (mail.expiresAt && mail.expiresAt <= Date.now()) return json(res, 410, { error: '邮件已过期' })
+      mail.claimed = mail.claimed && typeof mail.claimed === 'object' ? mail.claimed : {}
+      if (mail.claimed[auth.name]) return json(res, 409, { error: '附件已领取' })
+      mail.claimed[auth.name] = Date.now()
+      saveJSON(MAILS_FILE, store)
+      return json(res, 200, { ok: true, attachments: Array.isArray(mail.attachments) ? mail.attachments : [] })
     }
 
     // ── 核心更新查询：已发布的最高版本 ──

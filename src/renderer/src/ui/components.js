@@ -224,6 +224,57 @@ export function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+// 账号掩码：只露前三位与后三位，中间用 * 替代（如 123*****456）
+export function maskAccount(acc) {
+  const s = String(acc || '')
+  if (s.length <= 6) return s.replace(/.(?=.{3})/g, '*')
+  return s.slice(0, 3) + '*'.repeat(s.length - 6) + s.slice(-3)
+}
+
+// ── 通用弹窗（终端风：角括号面板 + 遮罩；按钮/遮罩/ESC 关闭并回传按钮 value）──
+// showDialog({ title, html, buttons: [{label, value, cls}], width }) → Promise<value|null>
+// showConfirm(title, message) → Promise<boolean>（确定/取消）
+export function showDialog({ title = '', html = '', buttons = [{ label: '确定', value: true, cls: 'btn-primary' }], width = 460 } = {}) {
+  return new Promise((resolve) => {
+    const overlay = el(`
+    <div class="dlg-overlay">
+      <div class="dlg panel" style="width:${width}px">
+        ${title ? `<div class="dlg-title">${title}</div>` : ''}
+        <div class="dlg-body">${html}</div>
+        <div class="dlg-btns">
+          ${buttons.map((b, i) => `<button class="btn btn-mini ${b.cls || ''}" data-i="${i}">${b.label}</button>`).join('')}
+        </div>
+      </div>
+    </div>`)
+    document.body.appendChild(overlay)
+    const close = (v) => {
+      window.removeEventListener('keydown', onKey)
+      overlay.remove()
+      resolve(v ?? null)
+    }
+    overlay.querySelectorAll('.dlg-btns .btn').forEach((btn) => {
+      btn.onclick = () => close(buttons[Number(btn.dataset.i)]?.value)
+    })
+    overlay.onclick = (e) => { if (e.target === overlay) close(null) }
+    const onKey = (e) => { if (e.key === 'Escape') close(null) }
+    window.addEventListener('keydown', onKey)
+    // 遮罩出现后按钮才可聚焦：默认聚焦第一个按钮（Enter 直接确认）
+    overlay.querySelector('.dlg-btns .btn')?.focus()
+  })
+}
+
+export function showConfirm(title, message, opts = {}) {
+  return showDialog({
+    title,
+    html: `<div class="dlg-msg">${message}</div>`,
+    width: opts.width || 420,
+    buttons: [
+      { label: opts.okLabel || '确定', value: true, cls: opts.danger ? 'btn-warn' : 'btn-primary' },
+      { label: opts.cancelLabel || '取消', value: false, cls: '' }
+    ]
+  }).then((v) => v === true)
+}
+
 // ── 自动协议常驻栏（屏幕底部，协议运行期间显示） ──
 // onTerminate：终止回调（由 router 注入，避免循环依赖）
 let protocolBarEl = null
